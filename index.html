@@ -728,6 +728,7 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
   <div class="tab" id="tab-table" onclick="switchTab('table')">📋 <span id="lbl-table">Tabla</span></div>
   <div class="tab" id="tab-mort" onclick="switchTab('mort')">🧮 Calculadora de Préstamo</div>
   <div class="tab" id="tab-calendar" onclick="switchTab('calendar')">📅 Calendario</div>
+  <div class="tab" id="tab-myincome" onclick="switchTab('myincome')">💵 Mis Ingresos</div>
   <div class="tab" id="tab-jarvis" onclick="switchTab('jarvis')">🤖 Jarvis AI</div>
 </div>
 
@@ -1125,6 +1126,22 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
       <div id="calBody" style="flex:1"></div>
     </div>
 
+    <div class="view" id="view-myincome">
+      <div style="padding:20px;max-width:900px;margin:0 auto;width:100%">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:22px;font-weight:800">💵 Mis Ingresos</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:3px" id="myIncomeSubtitle">Tus comisiones personales</div>
+          </div>
+          <button onclick="showAddMyIncome()" style="background:linear-gradient(135deg,var(--gold),#d4920a);border:none;color:#000;padding:9px 18px;border-radius:9px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit">+ Agregar Ingreso</button>
+        </div>
+        <!-- KPIs -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px" id="myIncKpis"></div>
+        <!-- List -->
+        <div id="myIncList"></div>
+      </div>
+    </div>
+
     <div class="view" id="view-jarvis">
       <div class="jv-wrap">
 
@@ -1143,9 +1160,8 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
             <div class="jv-msg">
               <div class="jv-av bot">🤖</div>
               <div>
-                <div class="jv-bbl">
-                  ¡Hola! Soy <strong>Jarvis 2.0</strong> 🚀<br><br>
-                  Tu asistente de IA integrado en el CRM. Puedo ayudarte con tus clientes, análisis de mercado, redactar emails o mensajes, calcular préstamos, y mucho más.<br><br>
+                <div class="jv-bbl" id="jvWelcomeBbl">
+                  ¡Hola Jefe! 👊 Soy <strong>Jarvis 2.0</strong> 🤖<br><br>
                   ¿En qué te puedo ayudar hoy?
                 </div>
                 <div class="jv-meta" id="jvInitTime"></div>
@@ -1615,6 +1631,7 @@ function switchTab(tab){
   if(tab==='mort')       { populateMortClients(); calcMort(); }
   if(tab==='jarvis')     { jvInit(); }
   if(tab==='calendar')   { calRender(); }
+  if(tab==='myincome')   { renderMyIncome(); }
 }
 
 function renderAll(){
@@ -2743,9 +2760,9 @@ var ROLE_LABELS = {
 
 // Default tab permissions per role (owner always sees everything)
 var DEFAULT_PERMS = {
-  manager:    { clients:true, addClient:true,  editClient:true,  delete:false, pipeline:true,  movePipeline:true,  income:true,  addIncome:true,  table:true,  mortgage:true, team:true,  forecast:true,  export:false, merge:true,  jarvis:true, calendar:true  },
+  manager:    { clients:true, addClient:true,  editClient:true,  delete:false, pipeline:true,  movePipeline:true,  income:true,  addIncome:true,  table:true,  mortgage:true, team:true,  forecast:true,  export:false, merge:true,  jarvis:true, calendar:true, myincome:true  },
   supervisor: { clients:true, addClient:true,  editClient:true,  delete:false, pipeline:true,  movePipeline:true,  income:false, addIncome:false, table:true,  mortgage:true, team:true,  forecast:false, export:false, merge:false, jarvis:true, calendar:true },
-  agent:      { clients:true, addClient:false, editClient:false, delete:false, pipeline:false, movePipeline:false, income:false, addIncome:false, table:false, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true, calendar:true }
+  agent:      { clients:true, addClient:false, editClient:false, delete:false, pipeline:false, movePipeline:false, income:false, addIncome:false, table:false, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true, calendar:true, myincome:true }
 };
 
 // Current user profile loaded from Firestore
@@ -2780,7 +2797,7 @@ async function loadUserProfile(uid) {
       var newRole  = isFirstUser ? 'owner' : 'agent';
       var newPerms = isFirstUser
         ? { clients:true, pipeline:true, income:true, table:true, mortgage:true, team:true, forecast:true, jarvis:true, calendar:true }
-        : { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:true, addIncome:true, table:true, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true, calendar:true };
+        : { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:true, addIncome:true, table:true, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true, calendar:true, myincome:true };
       _userProfile = {
         uid:             uid,
         name:            _fbUser.displayName || _fbUser.email,
@@ -2815,6 +2832,7 @@ function applyTabPermissions() {
     'tab-forecast': 'forecast',
     'tab-jarvis':   'jarvis',
     'tab-calendar': 'calendar',
+    'tab-myincome': 'myincome',
   };
   Object.keys(tabMap).forEach(function(tabId) {
     var el = document.getElementById(tabId);
@@ -3684,18 +3702,97 @@ var jvLang      = 'es';   // sigue el idioma del CRM
 
 // Commands bilinguals
 var JV_CMDS = [
-  { ico:'☀️', es:'Buenos días leads',   en:'Good morning leads',   q:'Genera un mensaje profesional de buenos días para mis clientes de bienes raíces' },
-  { ico:'📋', es:'Resumen del día',      en:'Daily summary',        q:'Dame un resumen de mis actividades y clientes importantes para hoy' },
-  { ico:'📞', es:'¿A quién llamar hoy?', en:'Who to call today',    q:'Revisa la lista de clientes y dime a quién debo hacerle seguimiento hoy' },
-  { ico:'🏠', es:'Buscar propiedades',   en:'Search properties',    q:'¿Cuáles son las mejores estrategias para encontrar propiedades en Virginia ahora mismo?' },
-  { ico:'📊', es:'Noticias del mercado', en:'Market news',          q:'¿Cuáles son las últimas tendencias del mercado inmobiliario y tasas de interés?' },
-  { ico:'✉️', es:'Redactar email',       en:'Draft email',          q:'Ayúdame a redactar un email profesional de seguimiento para un cliente de bienes raíces' },
-  { ico:'💬', es:'Redactar SMS',         en:'Draft SMS',            q:'Redacta un SMS profesional para enviar a mis clientes sobre nuevas propiedades' },
-  { ico:'💰', es:'Calcular comisión',    en:'Calculate commission', q:'Explícame cómo calcular la comisión para una venta de $450,000 al 3%' },
-  { ico:'📝', es:'Script de llamada',    en:'Call script',          q:'Dame un script profesional para llamar a un cliente potencial de bienes raíces' },
-  { ico:'🌤️', es:'¿Clima hoy?',         en:'Weather today',        q:'¿Cómo está el clima hoy en Arlington Virginia?' },
+  { ico:'🔥', es:'Dame los calientes',        en:'Show hot leads',          q:'Dame los clientes calientes' },
+  { ico:'⚠️', es:'¿Quiénes están vencidos?',  en:'Who is overdue?',         q:'¿Quiénes están vencidos?' },
+  { ico:'📅', es:'¿A quién llamo esta semana?',en:'Calls this week',         q:'¿A quién llamo esta semana?' },
+  { ico:'💰', es:'Ingresos del mes',           en:'Income this month',       q:'Resumen de ingresos del mes' },
+  { ico:'📊', es:'Resumen del CRM',            en:'CRM summary',             q:'Dame el resumen del CRM' },
+  { ico:'✉️', es:'Redactar email',             en:'Draft email',             q:'Ayúdame a redactar un email profesional de seguimiento para un cliente de bienes raíces' },
+  { ico:'💬', es:'Redactar SMS masivo',        en:'Draft bulk SMS',          q:'Redacta un SMS profesional para enviar a todos mis clientes calientes' },
+  { ico:'📝', es:'Script de llamada',          en:'Call script',             q:'Dame un script profesional para llamar a un cliente potencial de bienes raíces' },
+  { ico:'✅', es:'Cerrados este mes',          en:'Closed this month',       q:'Cerrados este mes' },
+  { ico:'🌡️', es:'Dame los tibios',            en:'Show warm leads',         q:'Dame los tibios' },
 ];
 
+
+
+// ══════════════════════════════════════════════════════════════
+//  MY INCOME — Agent personal income view
+// ══════════════════════════════════════════════════════════════
+function getMyIncome() {
+  if (typeof incomeTxs === 'undefined') return [];
+  if (isOwner()) return incomeTxs;
+  return incomeTxs.filter(function(tx) {
+    return !tx.createdBy || tx.createdBy === _fbUserId;
+  });
+}
+
+function renderMyIncome() {
+  var txs   = getMyIncome();
+  var total = txs.reduce(function(s,t){ return s+(t.amount||0); },0);
+  var refs  = txs.reduce(function(s,t){ return s+(t.refAmt||0)+(t.refAmount2||0); },0);
+  var net   = total - refs;
+  var month = txs.filter(function(t){
+    var d = new Date(t.date+'T00:00:00'), n = new Date();
+    return d.getMonth()===n.getMonth() && d.getFullYear()===n.getFullYear();
+  });
+  var monthTotal = month.reduce(function(s,t){ return s+(t.amount||0); },0);
+
+  // Subtitle
+  var sub = document.getElementById('myIncomeSubtitle');
+  if (sub) {
+    var name = _fbUser ? (_fbUser.displayName || _fbUser.email) : 'Tú';
+    sub.textContent = isOwner() ? 'Todos los ingresos del equipo' : ('Comisiones de ' + name);
+  }
+
+  // KPIs
+  var kpis = document.getElementById('myIncKpis');
+  if (kpis) {
+    kpis.innerHTML = [
+      { ico:'💰', lbl:'Total',         val:'$'+total.toLocaleString(),     col:'var(--gold)' },
+      { ico:'📅', lbl:'Este mes',      val:'$'+monthTotal.toLocaleString(),col:'var(--green)' },
+      { ico:'🤝', lbl:'Referidos',     val:'-$'+refs.toLocaleString(),     col:'#ef4444' },
+      { ico:'✅', lbl:'Neto',          val:'$'+net.toLocaleString(),       col:'var(--blue2)' },
+      { ico:'📊', lbl:'Transacciones', val:txs.length,                     col:'var(--muted)' },
+    ].map(function(k) {
+      return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;text-align:center">' +
+        '<div style="font-size:20px;margin-bottom:4px">' + k.ico + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">' + k.lbl + '</div>' +
+        '<div style="font-size:18px;font-weight:800;color:' + k.col + '">' + k.val + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  // List
+  var list = document.getElementById('myIncList');
+  if (!list) return;
+  if (!txs.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No tienes ingresos registrados aún.<br><br><button onclick="showAddMyIncome()" style="background:linear-gradient(135deg,var(--gold),#d4920a);border:none;color:#000;padding:9px 18px;border-radius:9px;font-weight:800;cursor:pointer;font-family:inherit">+ Agregar primer ingreso</button></div>';
+    return;
+  }
+  var sorted = txs.slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+  list.innerHTML = sorted.map(function(tx) {
+    var catIco = {real_estate:'🏠',loan:'🏦',referral:'🤝',other:'📋'}[tx.category||'other'] || '📋';
+    var refStr = tx.refAmt ? (' <span style="color:#ef4444;font-size:11px">-$'+Number(tx.refAmt).toLocaleString()+' ref</span>') : '';
+    return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
+      '<div>' +
+        '<div style="font-weight:700;font-size:14px">' + catIco + ' ' + (tx.client||tx.clientName||'—') + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-top:2px">' + (tx.date||'') + ' · ' + (tx.category||'') + (tx.type?' · '+tx.type:'') + '</div>' +
+        (tx.notes ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">📝 '+tx.notes+'</div>' : '') +
+      '</div>' +
+      '<div style="text-align:right">' +
+        '<div style="font-size:18px;font-weight:800;color:var(--green)">$' + Number(tx.amount||0).toLocaleString() + '</div>' +
+        refStr +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function showAddMyIncome() {
+  // Reuse the existing income form by switching to income tab
+  if (typeof switchTab === 'function') switchTab('income');
+  showToast('💡 Agrega tu ingreso aquí y aparecerá en Mis Ingresos automáticamente');
+}
 
 // ══════════════════════════════════════════════════════════════
 //  CALENDAR ENGINE
@@ -4000,13 +4097,28 @@ function jvCheckVencidos() {
 function jvInit() {
   if (jvInited) return;
   jvInited = true;
-  // Set init time on welcome message
   var t = document.getElementById('jvInitTime');
   if (t) t.textContent = new Date().toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit' });
+  // Dynamic greeting
+  var bbl = document.getElementById('jvWelcomeBbl');
+  if (bbl) {
+    var userName = (_fbUser && (_fbUser.displayName || _fbUser.email.split('@')[0])) || 'Jefe';
+    var isOwnerUser = isOwner();
+    var greeting = isOwnerUser ? 'Hola Jefe' : ('Hola ' + userName);
+    var hour = new Date().getHours();
+    var timeGreet = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
+    var totalC = (typeof clients !== 'undefined') ? clients.length : 0;
+    var hotC   = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.temp==='hot'; }).length : 0;
+    var today  = new Date().toISOString().split('T')[0];
+    var venc   = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.nextCall && c.nextCall < today && c.stage !== 'closed'; }).length : 0;
+    var statusLine = totalC > 0 ? ('<br><small style="color:var(--muted)">📊 ' + totalC + ' clientes · 🔥 ' + hotC + ' calientes' + (venc > 0 ? ' · <span style="color:#ef4444">⚠️ ' + venc + ' vencidos</span>' : '') + '</small>') : '';
+    bbl.innerHTML = timeGreet + ', <strong>' + greeting + '!</strong> 👊 Soy <strong>Jarvis 2.0</strong> 🤖' + statusLine + '<br><br>¿En qué te puedo ayudar hoy?';
+  }
   jvBuildCmds();
   jvCheckStatus();
   jvLoadMem();
   jvCrmSnap();
+  jvCheckVencidos();
   setInterval(jvCheckStatus, 30000);
 }
 
