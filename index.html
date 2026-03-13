@@ -1719,6 +1719,10 @@ function setPeriod(p,btn){ incomePeriod=p; document.querySelectorAll('.period-bt
 function filteredIncome(){
   const now=new Date();
   return incomeTxs.filter(tx=>{
+    // Agents only see their own income
+    if(!isOwner() && _userProfile && _userProfile.role !== 'owner') {
+      if(tx.createdBy && tx.createdBy !== _fbUserId) return false;
+    }
     if(incomePeriod==='all')return true;
     const d=new Date(tx.date+'T00:00:00');
     if(incomePeriod==='month') return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
@@ -2699,22 +2703,31 @@ async function loadUserProfile(uid) {
       _userProfile = snap.data();
       _userProfile.uid = uid;
     } else {
-      // First time - create profile
+      // First time — new users are agents, only very first user ever is owner
+      var isFirstUser = false;
+      try {
+        var usersSnap = await fb.getDocs(fb.collection(_fbDb, 'users'));
+        isFirstUser = usersSnap.empty;
+      } catch(e) { isFirstUser = false; }
+      var newRole  = isFirstUser ? 'owner' : 'agent';
+      var newPerms = isFirstUser
+        ? { clients:true, pipeline:true, income:true, table:true, mortgage:true, team:true, forecast:true, jarvis:true }
+        : { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:true, addIncome:true, table:true, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true };
       _userProfile = {
-        uid:              uid,
-        name:             _fbUser.displayName || _fbUser.email,
-        email:            _fbUser.email,
-        role:             'owner', // first user is owner
-        perms:            { clients:true, pipeline:true, income:true, table:true, mortgage:true, team:true, forecast:true, jarvis:true },
-        assignedClients:  [],
-        approved:         true,
-        createdAt:        Date.now()
+        uid:             uid,
+        name:            _fbUser.displayName || _fbUser.email,
+        email:           _fbUser.email,
+        role:            newRole,
+        perms:           newPerms,
+        assignedClients: [],
+        approved:        isFirstUser,
+        createdAt:       Date.now()
       };
       await fb.setDoc(ref, _userProfile);
     }
   } catch(ex) {
     console.warn('loadUserProfile error:', ex);
-    _userProfile = { uid, role:'owner', perms:{ clients:true,pipeline:true,income:true,table:true,mortgage:true,team:true,forecast:true,jarvis:true }, approved:true };
+    _userProfile = { uid, role:'agent', perms:{ clients:true, pipeline:false, income:false, table:false, mortgage:true, team:false, forecast:false, jarvis:true }, approved:false };
   }
 }
 
@@ -2790,6 +2803,19 @@ async function saveUserProfile(uid, data) {
 // ── Delete / deactivate user ──
 async function toggleUserApproval(uid, approved) {
   await saveUserProfile(uid, { approved: approved });
+}
+
+async function deleteMember(uid) {
+  if (!confirm('¿Eliminar este usuario permanentemente?')) return;
+  try {
+    var fb = window._firebase;
+    await fb.deleteDoc(fb.doc(_fbDb, 'users', uid));
+    _teamMembers = _teamMembers.filter(function(m){ return m.uid !== uid; });
+    renderAdminPanel();
+    showToast('✅ Usuario eliminado');
+  } catch(e) {
+    showToast('❌ Error: ' + e.message);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2891,7 +2917,7 @@ function renderMemberCard(member) {
       + '<button onclick="editMember(\'' + member.uid + '\')" style="font-size:11px;font-weight:700;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);color:#3b82f6;padding:5px 12px;border-radius:7px;cursor:pointer;font-family:inherit">⚙️ Permisos</button>'
       + '<button onclick="assignClientsModal(\'' + member.uid + '\')" style="font-size:11px;font-weight:700;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:#a855f7;padding:5px 12px;border-radius:7px;cursor:pointer;font-family:inherit">📋 Clientes</button>'
       + (member.approved
-        ? '<button onclick="toggleUserApproval(\'' + member.uid + '\',false)" style="font-size:11px;font-weight:700;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#ef4444;padding:5px 12px;border-radius:7px;cursor:pointer;font-family:inherit">🚫 Desactivar</button>'
+        ? '<button onclick="toggleUserApproval(\'' + member.uid + '\',false)" style="font-size:11px;font-weight:700;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#ef4444;padding:5px 12px;border-radius:7px;cursor:pointer;font-family:inherit">🚫 Desactivar</button> <button onclick="deleteMember(\'' + member.uid + '\')" style="font-size:11px;font-weight:700;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444;padding:5px 12px;border-radius:7px;cursor:pointer;font-family:inherit">🗑️ Eliminar</button>'        + ' <button onclick="deleteMember(\'' + member.uid + '\')" style="font-size:11px;font-weight:700;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444;padding:5px 12px;border-radius:7px;cursor:pointer;font-family:inherit">🗑️ Eliminar</button>'
         : '<button onclick="toggleUserApproval(\'' + member.uid + '\',true)" style="font-size:11px;font-weight:700;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:#22c55e;padding:5px 12px;border-radius:7px;cursor:pointer;font-family:inherit">✅ Activar</button>')
       + '</div>';
   }
