@@ -499,6 +499,13 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
   transform: translateX(3px);
 }
 .jv-cmd .jv-ico { font-size: 15px; flex-shrink: 0; }
+.jv-cat-btn { width:100%; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:8px; padding:8px 10px; color:var(--text); font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; transition:.15s; }
+.jv-cat-btn:hover { background:rgba(255,255,255,.08); }
+.jv-cat-btn.open { background:rgba(240,165,0,.1); border-color:rgba(240,165,0,.3); color:var(--gold); }
+.jv-cat-cmds { display:none; padding-left:6px; margin-bottom:6px; }
+.jv-cat-cmds.open { display:block; }
+.jv-cmd-sm { width:100%; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.05); border-radius:6px; padding:6px 10px; color:var(--muted); font-size:11px; font-weight:500; cursor:pointer; font-family:inherit; text-align:left; margin-bottom:3px; transition:.15s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.jv-cmd-sm:hover { background:rgba(255,255,255,.07); color:var(--text); border-color:rgba(240,165,0,.2); }
 
 /* Voice button */
 .jv-voice {
@@ -3801,18 +3808,187 @@ var jvMems      = [];
 var jvLang      = 'es';   // sigue el idioma del CRM
 
 // Commands bilinguals
-var JV_CMDS = [
-  { ico:'🔥', es:'Dame los calientes',        en:'Show hot leads',          q:'Dame los clientes calientes' },
-  { ico:'⚠️', es:'¿Quiénes están vencidos?',  en:'Who is overdue?',         q:'¿Quiénes están vencidos?' },
-  { ico:'📅', es:'¿A quién llamo esta semana?',en:'Calls this week',         q:'¿A quién llamo esta semana?' },
-  { ico:'💰', es:'Ingresos del mes',           en:'Income this month',       q:'Resumen de ingresos del mes' },
-  { ico:'📊', es:'Resumen del CRM',            en:'CRM summary',             q:'Dame el resumen del CRM' },
-  { ico:'✉️', es:'Redactar email',             en:'Draft email',             q:'Ayúdame a redactar un email profesional de seguimiento para un cliente de bienes raíces' },
-  { ico:'💬', es:'Redactar SMS masivo',        en:'Draft bulk SMS',          q:'Redacta un SMS profesional para enviar a todos mis clientes calientes' },
-  { ico:'📝', es:'Script de llamada',          en:'Call script',             q:'Dame un script profesional para llamar a un cliente potencial de bienes raíces' },
-  { ico:'✅', es:'Cerrados este mes',          en:'Closed this month',       q:'Cerrados este mes' },
-  { ico:'🌡️', es:'Dame los tibios',            en:'Show warm leads',         q:'Dame los tibios' },
+var JV_CATS = [
+  {
+    ico:'👥', es:'Clientes', en:'Clients',
+    cmds:[
+      {es:'Dame todos los clientes',                    en:'Show all clients',                      q:'Dame todos los clientes'},
+      {es:'Dame los compradores',                       en:'Show buyers',                           q:'Dame los compradores'},
+      {es:'Dame los vendedores',                        en:'Show sellers',                          q:'Dame los vendedores'},
+      {es:'Dame los de refinance',                      en:'Show refinance',                        q:'Dame los clientes de refinance'},
+      {es:'Dame los de préstamo',                       en:'Show loan clients',                     q:'Dame los clientes de préstamo'},
+      {es:'Dame los calientes 🔥',                     en:'Show hot leads 🔥',                     q:'Dame los calientes'},
+      {es:'Dame los tibios 🌡️',                        en:'Show warm leads 🌡️',                    q:'Dame los tibios'},
+      {es:'Dame los fríos 🧊',                         en:'Show cold leads 🧊',                    q:'Dame los fríos'},
+      {es:'¿Cuántos clientes tengo?',                   en:'How many clients?',                     q:'¿Cuántos clientes tengo?'},
+      {es:'Dame el resumen del CRM',                    en:'CRM summary',                           q:'Dame el resumen del CRM'},
+      {es:'Dame clientes sin llamada agendada',         en:'Clients with no call scheduled',        q:'Dame clientes que no tienen nextCall agendado'},
+      {es:'Dame clientes sin email',                    en:'Clients without email',                 q:'Dame clientes sin email registrado'},
+      {es:'Dame clientes agregados esta semana',        en:'Clients added this week',               q:'Dame los clientes agregados esta semana'},
+      {es:'Dame clientes agregados este mes',           en:'Clients added this month',              q:'Dame los clientes agregados este mes'},
+      {es:'¿Cuánto vale mi pipeline total?',            en:'Total pipeline value?',                 q:'¿Cuánto vale el pipeline total en monto?'},
+      {es:'¿Cuántos compradores vs vendedores?',        en:'Buyers vs sellers count?',              q:'¿Cuántos compradores vs vendedores tengo?'},
+      {es:'Dame los clientes con notas',                en:'Clients with notes',                    q:'Dame los clientes que tienen notas'},
+      {es:'Agrega a [nombre, tel, tipo, temp]',         en:'Add [name, phone, type, temp]',         q:'Agrega un nuevo cliente'},
+      {es:'Actualiza el teléfono de [nombre]',          en:'Update phone for [name]',               q:'Actualiza el teléfono de un cliente'},
+      {es:'Mueve a [nombre] a [etapa]',                 en:'Move [name] to [stage]',                q:'Mueve un cliente a una etapa del pipeline'},
+      {es:'Marca a [nombre] como cerrado',              en:'Mark [name] as closed',                 q:'Marca un cliente como cerrado'},
+      {es:'Elimina a [nombre]',                         en:'Delete [name]',                         q:'Elimina un cliente del CRM'},
+      {es:'Busca a [nombre]',                           en:'Search for [name]',                     q:'Busca un cliente por nombre'},
+      {es:'Dame el cliente con más valor',              en:'Highest value client',                  q:'¿Cuál es el cliente con mayor monto en el CRM?'},
+      {es:'Dame los más antiguos sin contacto',         en:'Oldest without contact',                q:'Dame los clientes más antiguos que no han sido contactados recientemente'},
+      {es:'Dame los clientes de [agente]',              en:'Clients of [agent]',                    q:'Dame los clientes asignados a un agente'},
+      {es:'Exporta la lista de clientes',               en:'Export client list',                    q:'Exporta todos los clientes'},
+    ]
+  },
+  {
+    ico:'📊', es:'Pipeline', en:'Pipeline',
+    cmds:[
+      {es:'¿Quiénes están en negociación?',             en:'Who is in negotiation?',                q:'¿Quiénes están en negociación?'},
+      {es:'¿Quiénes están en Bajo Contrato?',           en:'Who is under contract?',                q:'¿Quiénes están en Bajo Contrato?'},
+      {es:'¿Quiénes son leads nuevos?',                 en:'Who are new leads?',                    q:'¿Quiénes son leads nuevos?'},
+      {es:'Dame los clientes calificados',              en:'Show qualified clients',                 q:'Dame los clientes calificados'},
+      {es:'¿Quiénes están vencidos? ⚠️',               en:'Who is overdue? ⚠️',                    q:'¿Quiénes están vencidos?'},
+      {es:'¿Quiénes cerraron este mes?',                en:'Who closed this month?',                q:'Cerrados este mes'},
+      {es:'Dame los cerrados este año',                 en:'Closed this year',                      q:'Dame los cerrados este año'},
+      {es:'Dame el valor total del pipeline',           en:'Total pipeline value',                  q:'¿Cuánto vale el pipeline total?'},
+      {es:'¿Cuántos días promedio para cerrar?',        en:'Average days to close?',                q:'¿Cuántos días promedio toma cerrar un cliente?'},
+      {es:'¿Cuál es mi tasa de conversión?',            en:'What is my conversion rate?',           q:'¿Cuál es mi tasa de conversión de lead a cierre?'},
+      {es:'Dame los que llevan más de 30 días en negociación', en:'30+ days in negotiation',        q:'Dame los clientes que llevan más de 30 días en negociación'},
+      {es:'Dame el pipeline por agente',                en:'Pipeline by agent',                     q:'Dame el pipeline organizado por agente'},
+      {es:'¿Cuántos leads entran por mes?',             en:'Leads per month?',                      q:'¿Cuántos leads nuevos entran por mes en promedio?'},
+      {es:'¿Cuántos cierres necesito para $[monto]?',   en:'Closings needed for $[amount]?',        q:'¿Cuántos cierres necesito para llegar a $50,000 este mes?'},
+      {es:'Dame los clientes contactados',              en:'Show contacted clients',                 q:'Dame los clientes en etapa contactado'},
+    ]
+  },
+  {
+    ico:'📅', es:'Calendario', en:'Calendar',
+    cmds:[
+      {es:'Abre el calendario',                         en:'Open calendar',                         q:'Abre el calendario'},
+      {es:'Dame las citas de hoy',                      en:'Today appointments',                    q:'¿A quién llamo hoy?'},
+      {es:'Dame las citas de esta semana',              en:'This week appointments',                q:'¿A quién llamo esta semana?'},
+      {es:'Dame las citas de mañana',                   en:'Tomorrow appointments',                 q:'Dame mis citas de mañana'},
+      {es:'¿Qué tengo el lunes?',                       en:'What do I have Monday?',                q:'¿Qué tengo el lunes?'},
+      {es:'Dame las citas del mes',                     en:'This month appointments',               q:'Dame todas las citas del mes'},
+      {es:'¿Cuántas citas tengo pendientes?',           en:'How many pending appointments?',        q:'¿Cuántas citas tengo pendientes?'},
+      {es:'Pon a [nombre] el [día] a las [hora]',       en:'Schedule [name] on [day] at [time]',    q:'Pon una cita en el calendario'},
+      {es:'Dame los que no tienen cita agendada',       en:'Clients without appointment',           q:'Dame los clientes que no tienen cita agendada'},
+      {es:'Ponme un recordatorio para [nombre]',        en:'Set reminder for [name]',               q:'Agrega un recordatorio para llamar a un cliente'},
+      {es:'Reagenda a [nombre] para [fecha]',           en:'Reschedule [name] to [date]',           q:'Reagenda la cita de un cliente'},
+      {es:'¿Tengo citas el [día]?',                     en:'Do I have appointments on [day]?',      q:'¿Tengo citas el viernes?'},
+      {es:'Dame los vencidos sin reagendar',            en:'Overdue without reschedule',            q:'Dame los clientes vencidos que no han reagendado'},
+    ]
+  },
+  {
+    ico:'💰', es:'Ingresos', en:'Income',
+    cmds:[
+      {es:'Dame el resumen de ingresos del mes',        en:'Monthly income summary',                q:'Dame el resumen de ingresos del mes'},
+      {es:'¿Cuánto gané este mes?',                     en:'How much did I earn this month?',       q:'¿Cuánto he ganado este mes?'},
+      {es:'¿Cuánto gané este año?',                     en:'How much did I earn this year?',        q:'¿Cuánto he ganado este año?'},
+      {es:'¿Cuánto gané en [mes]?',                     en:'How much in [month]?',                  q:'¿Cuánto gané en enero?'},
+      {es:'Registra comisión de $[monto] para [nombre]',en:'Record $[amount] for [name]',           q:'Registra una comisión nueva'},
+      {es:'¿Cuál fue mi mejor mes?',                    en:'Best month?',                           q:'¿Cuál fue mi mejor mes de ingresos?'},
+      {es:'Dame los ingresos de Real Estate',           en:'Real Estate income',                    q:'Dame los ingresos de la categoría Real Estate'},
+      {es:'Dame los ingresos de Préstamo',              en:'Loan income',                           q:'Dame los ingresos de la categoría Préstamo'},
+      {es:'Dame el promedio por cierre',                en:'Average per closing',                   q:'¿Cuál es mi promedio de ingreso por cierre?'},
+      {es:'Dame los 5 cierres más grandes',             en:'Top 5 closings',                        q:'Dame los 5 cierres más grandes de todos los tiempos'},
+      {es:'Compara este mes vs el mes pasado',          en:'This month vs last month',              q:'Compara mis ingresos de este mes vs el mes pasado'},
+      {es:'¿Cuánto gané en Real Estate vs Préstamo?',   en:'Real Estate vs Loan income?',           q:'¿Cuánto gané en Real Estate comparado con Préstamo?'},
+      {es:'¿Cuánto me debo en referidos?',              en:'How much do I owe in referrals?',       q:'¿Cuánto debo en comisiones de referidos?'},
+      {es:'Proyecta mis ingresos del año',              en:'Project annual income',                 q:'Proyecta mis ingresos del año basado en lo que llevo'},
+      {es:'¿Cuánto necesito para llegar a $[meta]?',    en:'How much to reach $[goal]?',            q:'¿Cuánto necesito cerrar para llegar a $100,000 este mes?'},
+      {es:'¿Cuál fue mi día más productivo?',           en:'Most productive day?',                  q:'¿Cuál fue mi día más productivo en ingresos?'},
+      {es:'Dame el ingreso por agente',                 en:'Income by agent',                       q:'Dame el resumen de ingresos por cada agente'},
+    ]
+  },
+  {
+    ico:'📞', es:'Comunicación', en:'Communication',
+    cmds:[
+      {es:'Llama a [nombre]',                           en:'Call [name]',                           q:'Llama a un cliente'},
+      {es:'Manda WhatsApp a [nombre]',                  en:'WhatsApp [name]',                       q:'Manda un WhatsApp a un cliente'},
+      {es:'Dame el teléfono de [nombre]',               en:'Get phone for [name]',                  q:'Dame el teléfono de un cliente'},
+      {es:'¿Cuál es el email de [nombre]?',             en:'Email of [name]?',                      q:'¿Cuál es el email de un cliente?'},
+      {es:'Redacta SMS para mis calientes',             en:'Draft SMS for hot leads',               q:'Redacta un SMS profesional para enviar a todos mis clientes calientes'},
+      {es:'Redacta SMS para mis vencidos',              en:'Draft SMS for overdue',                 q:'Redacta un SMS de seguimiento para clientes vencidos'},
+      {es:'Redacta email de seguimiento para [nombre]', en:'Follow-up email for [name]',            q:'Redacta un email de seguimiento profesional para un cliente'},
+      {es:'Redacta email de felicitación de cierre',    en:'Closing congratulations email',         q:'Redacta un email de felicitación por cerrar una propiedad'},
+      {es:'Manda recordatorio de cita a [nombre]',      en:'Send appointment reminder to [name]',   q:'Redacta un SMS recordatorio de cita para un cliente'},
+      {es:'Dame un script para hablar de tasas',        en:'Script for rate conversation',          q:'Dame un script para hablar de tasas de interés con un cliente'},
+      {es:'Dame un script para venta difícil',          en:'Script for difficult sale',             q:'Dame un script para manejar objeciones en una venta difícil'},
+      {es:'Dame un script de llamada en frío',          en:'Cold call script',                      q:'Dame un script profesional para llamada en frío a un prospecto'},
+      {es:'SMS masivo a todos mis clientes',            en:'Bulk SMS all clients',                  q:'Redacta un SMS masivo profesional para enviar a todos mis clientes'},
+    ]
+  },
+  {
+    ico:'🗂️', es:'Navegación', en:'Navigation',
+    cmds:[
+      {es:'Abre clientes',                              en:'Open clients',                          q:'Abre clientes'},
+      {es:'Abre pipeline',                              en:'Open pipeline',                         q:'Abre pipeline'},
+      {es:'Abre equipo',                                en:'Open team',                             q:'Abre equipo'},
+      {es:'Abre ingresos',                              en:'Open income',                           q:'Abre ingresos'},
+      {es:'Abre mis ingresos',                          en:'Open my income',                        q:'Abre mis ingresos'},
+      {es:'Abre calendario',                            en:'Open calendar',                         q:'Abre calendario'},
+      {es:'Abre calculadora de préstamo',               en:'Open loan calculator',                  q:'Abre calculadora de préstamo'},
+      {es:'Abre tabla',                                 en:'Open table',                            q:'Abre tabla'},
+      {es:'Abre Jarvis',                                en:'Open Jarvis',                           q:'Abre Jarvis'},
+      {es:'Regresa a clientes',                         en:'Back to clients',                       q:'Abre clientes'},
+    ]
+  },
+  {
+    ico:'👥', es:'Equipo', en:'Team',
+    cmds:[
+      {es:'¿Cuántos agentes tengo?',                    en:'How many agents?',                      q:'¿Cuántos agentes tengo en el equipo?'},
+      {es:'Dame la lista del equipo',                   en:'Show team list',                        q:'Dame la lista del equipo'},
+      {es:'¿Quién cerró más este mes?',                 en:'Who closed the most?',                  q:'¿Quién cerró más este mes?'},
+      {es:'Dame el leaderboard',                        en:'Show leaderboard',                      q:'Dame el leaderboard del equipo'},
+      {es:'¿Cuántos cierres tiene [agente] este mes?',  en:'Closings for [agent] this month?',      q:'¿Cuántos cierres tiene un agente este mes?'},
+      {es:'Dame el ranking de agentes',                 en:'Agent ranking',                         q:'Dame el ranking de agentes por ingresos'},
+      {es:'¿Quién tiene más clientes calientes?',       en:'Who has most hot leads?',               q:'¿Qué agente tiene más clientes calientes?'},
+      {es:'Dame los clientes de [agente]',              en:'Clients of [agent]',                    q:'Dame los clientes de un agente específico'},
+      {es:'¿Qué agente tiene más vencidos?',            en:'Who has most overdue?',                 q:'¿Qué agente tiene más clientes vencidos?'},
+      {es:'¿Cuánto ha generado [agente] este año?',     en:'How much has [agent] earned this year?',q:'¿Cuánto ha generado un agente este año?'},
+      {es:'Dame los agentes inactivos',                 en:'Show inactive agents',                  q:'Dame los agentes que no han agregado clientes esta semana'},
+    ]
+  },
+  {
+    ico:'📈', es:'Reportes', en:'Reports',
+    cmds:[
+      {es:'Dame el resumen del día',                    en:'Daily summary',                         q:'Dame el resumen del día'},
+      {es:'Dame el resumen de la semana',               en:'Weekly summary',                        q:'Dame el resumen de la semana'},
+      {es:'¿Cómo voy este mes?',                        en:'How am I doing this month?',            q:'¿Cómo voy este mes comparado con el anterior?'},
+      {es:'Dame las estadísticas del CRM',              en:'CRM statistics',                        q:'Dame las estadísticas completas del CRM'},
+      {es:'¿Cuántos cierres tuve este año?',            en:'Closings this year?',                   q:'¿Cuántos cierres tuve este año?'},
+      {es:'¿Qué clientes no he contactado?',            en:'Who have I not contacted?',             q:'¿Qué clientes no he contactado esta semana?'},
+      {es:'Dame el reporte mensual completo',           en:'Full monthly report',                   q:'Dame el reporte mensual completo de CRM e ingresos'},
+      {es:'¿Cuál fue mi mejor semana?',                 en:'Best week?',                            q:'¿Cuál fue mi mejor semana de ingresos?'},
+      {es:'Dame el reporte por agente',                 en:'Report by agent',                       q:'Dame el reporte de rendimiento por agente'},
+      {es:'¿Cuál es mi fuente de leads más productiva?',en:'Most productive lead source?',          q:'¿Cuál es mi fuente de leads más productiva?'},
+      {es:'Dame el forecast del próximo mes',           en:'Next month forecast',                   q:'Dame una proyección de ingresos para el próximo mes'},
+      {es:'¿Cuánto crecí vs el mes pasado?',            en:'Growth vs last month?',                 q:'¿Cuánto crecí en ingresos comparado con el mes pasado?'},
+      {es:'Dame el reporte de referidos',               en:'Referrals report',                      q:'Dame el reporte completo de referidos y comisiones'},
+      {es:'¿Cuántos leads se perdieron este mes?',      en:'Lost leads this month?',                q:'¿Cuántos leads se perdieron o vencieron este mes?'},
+      {es:'Dame métricas de conversión',                en:'Conversion metrics',                    q:'Dame las métricas de conversión del CRM'},
+    ]
+  },
+  {
+    ico:'🤖', es:'Jarvis AI', en:'Jarvis AI',
+    cmds:[
+      {es:'¿Qué puedes hacer?',                         en:'What can you do?',                      q:'¿Qué puedes hacer? Dame una lista de tus capacidades'},
+      {es:'Dame un script de llamada en frío',          en:'Cold call script',                      q:'Dame un script profesional para llamada en frío'},
+      {es:'Dame un script de seguimiento',              en:'Follow-up script',                      q:'Dame un script para llamada de seguimiento a un cliente'},
+      {es:'¿Cuál es la tasa de interés hoy?',           en:'Interest rate today?',                  q:'¿Cuál es la tasa de interés hipotecaria hoy?'},
+      {es:'Dame noticias del mercado inmobiliario',     en:'Real estate market news',               q:'¿Cuáles son las últimas noticias del mercado inmobiliario?'},
+      {es:'Calcula comisión de $500,000 al 3%',         en:'Calculate commission $500k 3%',         q:'Calcula la comisión de una venta de $500,000 al 3%'},
+      {es:'¿Cómo está el mercado en Virginia?',         en:'Market in Virginia?',                   q:'¿Cómo está el mercado inmobiliario en Virginia?'},
+      {es:'Dame consejos para cerrar más rápido',       en:'Tips to close faster',                  q:'Dame consejos profesionales para cerrar ventas más rápido'},
+      {es:'Explícame los tipos de préstamo',            en:'Explain loan types',                    q:'Explícame los tipos de préstamo hipotecario disponibles'},
+      {es:'Dame preguntas para calificar compradores',  en:'Questions to qualify buyers',           q:'Dame las mejores preguntas para calificar a un comprador potencial'},
+      {es:'¿Cuáles son las tasas de hoy?',              en:'Rates today?',                          q:'¿Cuáles son las tasas de interés hipotecario hoy?'},
+      {es:'Dame tips para generar más leads',           en:'Tips for more leads',                   q:'Dame estrategias para generar más leads de bienes raíces'},
+    ]
+  },
 ];
+var JV_CMDS = []; // kept for compatibility
 
 
 
@@ -4309,6 +4485,48 @@ async function calDeleteEvent(id) {
 }
 
 
+// ── Team summary ──
+function jvDoTeamSummary() {
+  if (typeof _teamMembers === 'undefined' || !_teamMembers.length) {
+    jvAddMsg('bot', lang==='es' ? '👥 No hay miembros en el equipo aún.' : '👥 No team members yet.');
+    return;
+  }
+  var h = '<strong>👥 ' + (lang==='es'?'Equipo':'Team') + ' (' + _teamMembers.length + ')</strong><br><br>';
+  _teamMembers.forEach(function(m) {
+    var roleLabel = {owner:'👑 Owner',manager:'🔵 Manager',supervisor:'🟣 Supervisor',agent:'👤 Agente'}[m.role]||m.role;
+    h += roleLabel + ' · <strong>' + (m.name||m.email) + '</strong>' + (m.approved?'':' ⏳') + '<br>';
+  });
+  jvAddMsg('bot', h, true);
+}
+
+// ── Daily report ──
+function jvDoDailyReport() {
+  var today = new Date().toISOString().split('T')[0];
+  var todayEvs = _calEvents ? _calEvents.filter(function(e){ return e.date === today; }) : [];
+  var venc = typeof clients!=='undefined' ? clients.filter(function(c){ return c.nextCall && c.nextCall < today && c.stage!=='closed'; }) : [];
+  var hotC = typeof clients!=='undefined' ? clients.filter(function(c){ return c.temp==='hot' && c.stage!=='closed'; }) : [];
+  var todayIncome = typeof incomeTxs!=='undefined' ? incomeTxs.filter(function(t){ return t.date===today; }) : [];
+  var todayTotal = todayIncome.reduce(function(s,t){ return s+(t.amount||0); },0);
+
+  var h = '<strong>📋 ' + (lang==='es'?'Resumen del día':'Daily Summary') + ' — ' + today + '</strong><br><br>';
+  h += '🔥 ' + (lang==='es'?'Calientes':'Hot leads') + ': <strong>' + hotC.length + '</strong><br>';
+  h += '📅 ' + (lang==='es'?'Citas hoy':'Appointments today') + ': <strong>' + todayEvs.length + '</strong><br>';
+  h += '⚠️ ' + (lang==='es'?'Vencidos':'Overdue') + ': <strong style="color:' + (venc.length?'#ef4444':'#22c55e') + '">' + venc.length + '</strong><br>';
+  h += '💰 ' + (lang==='es'?'Ingresos hoy':'Income today') + ': <strong style="color:var(--green)">$' + todayTotal.toLocaleString() + '</strong>';
+  jvAddMsg('bot', h, true);
+}
+
+// ── Filter by type ──
+function jvDoFilterType(p) {
+  if (typeof switchTab === 'function') switchTab('clients');
+  if (typeof typeFlt !== 'undefined' && p.type) {
+    typeFlt = p.type;
+    if (typeof renderClients === 'function') renderClients();
+    var labels = {buy:'Compradores',sell:'Vendedores',refi:'Refinance',loan:'Préstamo',referral:'Referido'};
+    jvAddMsg('bot', '✅ Mostrando: <strong>' + (labels[p.type]||p.type) + '</strong>');
+  }
+}
+
 // ── Auto-check vencidos on load ──
 function jvCheckVencidos() {
   if (typeof clients === 'undefined') return;
@@ -4356,17 +4574,33 @@ function jvInit() {
 
 // ── Build command buttons ──
 function jvBuildCmds() {
-  var lang = document.querySelector('.lang-btn.active');
-  var l = (lang && lang.textContent.trim() === 'EN') ? 'en' : 'es';
+  var l = (typeof lang !== 'undefined') ? lang : 'es';
   var el = document.getElementById('jvCmds');
   if (!el) return;
   el.innerHTML = '';
-  JV_CMDS.forEach(function(c, i) {
-    var btn = document.createElement('button');
-    btn.className = 'jv-cmd';
-    btn.innerHTML = '<span class="jv-ico">' + c.ico + '</span><span>' + (l === 'es' ? c.es : c.en) + '</span>';
-    btn.addEventListener('click', function() { jvSend(c.q); });
-    el.appendChild(btn);
+  JV_CATS.forEach(function(cat, ci) {
+    // Category button
+    var catBtn = document.createElement('button');
+    catBtn.className = 'jv-cat-btn';
+    catBtn.innerHTML = cat.ico + ' ' + (l === 'es' ? cat.es : cat.en) + ' <span>▶</span>';
+    catBtn.addEventListener('click', function() {
+      catBtn.classList.toggle('open');
+      cmdsDiv.classList.toggle('open');
+      catBtn.querySelector('span').textContent = catBtn.classList.contains('open') ? '▼' : '▶';
+    });
+    el.appendChild(catBtn);
+    // Commands container
+    var cmdsDiv = document.createElement('div');
+    cmdsDiv.className = 'jv-cat-cmds';
+    cat.cmds.forEach(function(c) {
+      var btn = document.createElement('button');
+      btn.className = 'jv-cmd-sm';
+      btn.textContent = (l === 'es' ? c.es : c.en);
+      btn.title = c.q;
+      btn.addEventListener('click', function() { jvSend(c.q); });
+      cmdsDiv.appendChild(btn);
+    });
+    el.appendChild(cmdsDiv);
   });
 }
 
@@ -4728,6 +4962,19 @@ function jvSystemPrompt() {
     '18. crm_search — buscar cliente por nombre',
     '    params: { query: "nombre a buscar" }',
     '',
+    '19. navigate — navegar a una pestaña del CRM',
+    '    params: { tab: "clients/pipeline/team/income/myincome/calendar/mort/jarvis" }',
+    '    USAR CUANDO: usuario dice abre/ve a/ir a + nombre de sección',
+    '',
+    '20. crm_team_summary — resumen del equipo',
+    '    params: {}',
+    '',
+    '21. crm_daily_report — resumen del día',
+    '    params: {}',
+    '',
+    '22. crm_filter_type — filtrar por tipo de transacción',
+    '    params: { type: "buy/sell/refi/loan/referral" }',
+    '',
     'REGLAS CRÍTICAS:',
     '- SIEMPRE responde con JSON válido, sin texto antes ni después, sin markdown, sin ```',
     '- Para montos con referidos múltiples: refby+refAmount = primer referido, refName2+refAmount2 = segundo',
@@ -4872,6 +5119,22 @@ async function jvExecuteAction(cmd, originalMsg) {
 
     case 'chat_reply':
       // Already shown in reply above, nothing more to do
+      break;
+
+    case 'navigate':
+      if (params.tab && typeof switchTab === 'function') switchTab(params.tab);
+      break;
+
+    case 'crm_team_summary':
+      jvDoTeamSummary();
+      break;
+
+    case 'crm_daily_report':
+      jvDoDailyReport();
+      break;
+
+    case 'crm_filter_type':
+      jvDoFilterType(params);
       break;
 
     case 'crm_delete_client':
