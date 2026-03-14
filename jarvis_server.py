@@ -115,10 +115,19 @@ def jarvis_command():
     data       = request.json or {}
     message    = data.get("message", "").strip()
     sys_prompt = data.get("system", "")
+    history    = data.get("history", [])  # conversation history from frontend
     if not message:
         return jsonify({"raw": "", "time": now()})
     try:
-        raw = call_claude(sys_prompt, [{"role": "user", "content": message}], max_tokens=1000)
+        # Build messages with history for context (Level 1 memory)
+        messages = []
+        for h in history[-10:]:  # last 10 messages
+            role = h.get("role", "user")
+            content = h.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": message})
+        raw = call_claude(sys_prompt, messages, max_tokens=1000)
         return jsonify({"raw": raw, "time": now()})
     except Exception as e:
         return jsonify({"raw": "", "reply": f"Error: {e}", "time": now()})
