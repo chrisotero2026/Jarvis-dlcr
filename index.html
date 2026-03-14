@@ -762,8 +762,8 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
   <div class="tab" id="tab-income" onclick="switchTab('income')">📈 <span id="lbl-income">Ingresos</span></div>
   <div class="tab" id="tab-table" onclick="switchTab('table')">📋 <span id="lbl-table">Tabla</span></div>
   <div class="tab" id="tab-mort" onclick="switchTab('mort')">🧮 Calculadora de Préstamo</div>
-  <div class="tab" id="tab-calendar" onclick="switchTab('calendar')">📅 Calendario</div>
-  <div class="tab" id="tab-myincome" onclick="switchTab('myincome')">💵 Mis Ingresos</div>
+  <div class="tab" id="tab-calendar" onclick="switchTab('calendar')">📅 <span id="lbl-calendar">Calendario</span></div>
+  <div class="tab" id="tab-myincome" onclick="switchTab('myincome')">💵 <span id="lbl-myincome">Mis Ingresos</span></div>
   <div class="tab" id="tab-jarvis" onclick="switchTab('jarvis')">🤖 Jarvis AI</div>
 </div>
 
@@ -1165,10 +1165,10 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
       <div style="padding:20px;max-width:900px;margin:0 auto;width:100%">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div>
-            <div style="font-size:22px;font-weight:800">💵 Mis Ingresos</div>
+            <div style="font-size:22px;font-weight:800">💵 <span id="myIncomeTitle">Mis Ingresos</span></div>
             <div style="font-size:13px;color:var(--muted);margin-top:3px" id="myIncomeSubtitle">Tus comisiones personales</div>
           </div>
-          <button onclick="showAddMyIncome()" style="background:linear-gradient(135deg,var(--gold),#d4920a);border:none;color:#000;padding:9px 18px;border-radius:9px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit">+ Agregar Ingreso</button>
+          <button onclick="showAddMyIncome()" id="myIncAddBtn" style="background:linear-gradient(135deg,var(--gold),#d4920a);border:none;color:#000;padding:9px 18px;border-radius:9px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit">+ <span id="lbl-addmyincome">Agregar Ingreso</span></button>
         </div>
         <!-- KPIs -->
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px" id="myIncKpis"></div>
@@ -1670,6 +1670,10 @@ function setLang(l){
     'lbl-tbl-hot':l==='es'?'Caliente':'Hot','lbl-tbl-cold':l==='es'?'Frío':'Cold',
     'lbl-cols':l==='es'?'Columnas':'Columns','lbl-tbl-exp':l==='es'?'Exportar':'Export',
     'lbl-reminders':l==='es'?'Recordatorios':'Reminders','lbl-call':l==='es'?'Llamar':'Call',
+    'lbl-calendar':l==='es'?'Calendario':'Calendar',
+    'lbl-myincome':l==='es'?'Mis Ingresos':'My Income',
+    'lbl-addmyincome':l==='es'?'Agregar Ingreso':'Add Income',
+    'myIncomeTitle':l==='es'?'Mis Ingresos':'My Income',
     'lbl-tpl':l==='es'?'Plantillas SMS:':'SMS Templates:',
     'searchInput':null,'tblSearch':null,
   };
@@ -3813,19 +3817,24 @@ function renderMyIncome() {
   // Subtitle
   var sub = document.getElementById('myIncomeSubtitle');
   if (sub) {
-    var name = _fbUser ? (_fbUser.displayName || _fbUser.email) : 'Tú';
-    sub.textContent = isOwner() ? 'Todos los ingresos del equipo' : ('Comisiones de ' + name);
+    var name = _fbUser ? (_fbUser.displayName || _fbUser.email) : (lang === 'es' ? 'Tú' : 'You');
+    sub.textContent = isOwner() 
+      ? (lang === 'es' ? 'Todos los ingresos del equipo' : 'All team income')
+      : (lang === 'es' ? 'Comisiones de ' + name : name + "'s commissions");
   }
+  // Update title
+  var titleEl = document.getElementById('myIncomeTitle');
+  if (titleEl) titleEl.textContent = lang === 'es' ? 'Mis Ingresos' : 'My Income';
 
   // KPIs
   var kpis = document.getElementById('myIncKpis');
   if (kpis) {
     kpis.innerHTML = [
-      { ico:'💰', lbl:'Total',         val:'$'+total.toLocaleString(),     col:'var(--gold)' },
-      { ico:'📅', lbl:'Este mes',      val:'$'+monthTotal.toLocaleString(),col:'var(--green)' },
-      { ico:'🤝', lbl:'Referidos',     val:'-$'+refs.toLocaleString(),     col:'#ef4444' },
-      { ico:'✅', lbl:'Neto',          val:'$'+net.toLocaleString(),       col:'var(--blue2)' },
-      { ico:'📊', lbl:'Transacciones', val:txs.length,                     col:'var(--muted)' },
+      { ico:'💰', lbl:lang==='es'?'Total':'Total',              val:'$'+total.toLocaleString(),     col:'var(--gold)' },
+      { ico:'📅', lbl:lang==='es'?'Este mes':'This month',    val:'$'+monthTotal.toLocaleString(),col:'var(--green)' },
+      { ico:'🤝', lbl:lang==='es'?'Referidos':'Referrals',    val:'-$'+refs.toLocaleString(),     col:'#ef4444' },
+      { ico:'✅', lbl:lang==='es'?'Neto':'Net',               val:'$'+net.toLocaleString(),       col:'var(--blue2)' },
+      { ico:'📊', lbl:lang==='es'?'Transacciones':'Transactions', val:txs.length,                 col:'var(--muted)' },
     ].map(function(k) {
       return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;text-align:center">' +
         '<div style="font-size:20px;margin-bottom:4px">' + k.ico + '</div>' +
@@ -3861,9 +3870,73 @@ function renderMyIncome() {
 }
 
 function showAddMyIncome() {
-  // Reuse the existing income form by switching to income tab
-  if (typeof switchTab === 'function') switchTab('income');
-  showToast('💡 Agrega tu ingreso aquí y aparecerá en Mis Ingresos automáticamente');
+  var isEs = lang === 'es';
+  var h = '<div>';
+  h += '<div style="font-size:16px;font-weight:800;margin-bottom:16px">💵 ' + (isEs ? 'Nuevo Ingreso' : 'New Income') + '</div>';
+  
+  h += '<div style="margin-bottom:10px"><label style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">' + (isEs ? 'Cliente' : 'Client') + '</label>';
+  h += '<input id="mi-client" type="text" placeholder="' + (isEs ? 'Nombre del cliente' : 'Client name') + '" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"></div>';
+
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  h += '<div><label style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">' + (isEs ? 'Monto ($)' : 'Amount ($)') + '</label>';
+  h += '<input id="mi-amount" type="number" placeholder="0.00" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"></div>';
+  h += '<div><label style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">' + (isEs ? 'Fecha' : 'Date') + '</label>';
+  h += '<input id="mi-date" type="date" value="' + new Date().toISOString().split('T')[0] + '" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"></div></div>';
+
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  h += '<div><label style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">' + (isEs ? 'Categoría' : 'Category') + '</label>';
+  h += '<select id="mi-cat" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none">';
+  h += '<option value="real_estate">🏠 Real Estate</option><option value="loan">🏦 ' + (isEs ? 'Préstamo' : 'Loan') + '</option><option value="referral">🤝 ' + (isEs ? 'Referido' : 'Referral') + '</option><option value="other">📋 ' + (isEs ? 'Otro' : 'Other') + '</option>';
+  h += '</select></div>';
+  h += '<div><label style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">' + (isEs ? 'Tipo' : 'Type') + '</label>';
+  h += '<select id="mi-type" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none">';
+  h += '<option value="buy">🏡 ' + (isEs ? 'Compra' : 'Buy') + '</option><option value="sell">💰 ' + (isEs ? 'Venta' : 'Sell') + '</option><option value="refi">🔄 Refinance</option><option value="loan">🏦 Loan</option><option value="referral">🤝 ' + (isEs ? 'Referido' : 'Referral') + '</option>';
+  h += '</select></div></div>';
+
+  h += '<div style="margin-bottom:10px"><label style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">' + (isEs ? 'Referido (nombre)' : 'Referral (name)') + '</label>';
+  h += '<input id="mi-ref" type="text" placeholder="' + (isEs ? 'Opcional' : 'Optional') + '" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"></div>';
+
+  h += '<div style="margin-bottom:16px"><label style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">' + (isEs ? 'Comisión referido ($)' : 'Referral commission ($)') + '</label>';
+  h += '<input id="mi-refamt" type="number" placeholder="0" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"></div>';
+
+  h += '<div style="margin-bottom:16px"><label style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">' + (isEs ? 'Notas' : 'Notes') + '</label>';
+  h += '<input id="mi-notes" type="text" placeholder="' + (isEs ? 'Opcional' : 'Optional') + '" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"></div>';
+
+  h += '<div style="display:flex;gap:8px">';
+  h += '<button onclick="saveMyIncome()" style="flex:1;padding:11px;border-radius:9px;border:none;background:linear-gradient(135deg,var(--gold),#d4920a);color:#000;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit">💾 ' + (isEs ? 'Guardar' : 'Save') + '</button>';
+  h += '<button onclick="closeGenModal()" style="padding:11px 16px;border-radius:9px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#94a3b8;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">' + (isEs ? 'Cancelar' : 'Cancel') + '</button>';
+  h += '</div></div>';
+  openGenModal(h);
+}
+
+function saveMyIncome() {
+  var client = (document.getElementById('mi-client').value || '').trim();
+  var amount = parseFloat(document.getElementById('mi-amount').value) || 0;
+  var date   = document.getElementById('mi-date').value;
+  var cat    = document.getElementById('mi-cat').value;
+  var type   = document.getElementById('mi-type').value;
+  var ref    = (document.getElementById('mi-ref').value || '').trim();
+  var refAmt = parseFloat(document.getElementById('mi-refamt').value) || 0;
+  var notes  = (document.getElementById('mi-notes').value || '').trim();
+  if (!client || !amount) { showToast('⚠️ ' + (lang === 'es' ? 'Cliente y monto son requeridos' : 'Client and amount are required')); return; }
+  var tx = {
+    id: Date.now(), created: Date.now(),
+    client: client, clientName: client,
+    amount: amount, date: date,
+    category: cat, type: type,
+    refby: ref, refAmt: refAmt,
+    notes: notes,
+    createdBy: _fbUserId || 'owner',
+    createdByName: (_fbUser && (_fbUser.displayName || _fbUser.email)) || 'Owner',
+    createdByRole: (_userProfile && _userProfile.role) || 'agent'
+  };
+  if (typeof incomeTxs !== 'undefined') {
+    incomeTxs.push(tx);
+    if (typeof saveAll === 'function') saveAll();
+  }
+  closeGenModal();
+  showToast('✅ ' + (lang === 'es' ? 'Ingreso guardado' : 'Income saved'));
+  renderMyIncome();
 }
 
 // ══════════════════════════════════════════════════════════════
