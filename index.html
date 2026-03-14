@@ -2225,8 +2225,16 @@ function openDetail(id){
       </div>
     </div>
     <div class="big-btns">
-      <button class="big-btn call" onclick="showPopupFromDetail(${c.id},this)">📞 ${lang==='es'?'Llamar':'Call'}</button>
-      <button class="big-btn sms" onclick="showPopupFromDetail(${c.id},this)">💬 SMS</button>
+      <a class="big-btn call" href="tel:${c.phone.replace(/\D/g,'')}" onclick="event.stopPropagation()">📞 ${lang==='es'?'Llamar':'Call'}</a>
+      <a class="big-btn sms" href="sms:${c.phone.replace(/\D/g,'')}" onclick="event.stopPropagation()">💬 SMS</a>
+    </div>
+    <div class="big-btns" style="margin-top:6px">
+      <a class="big-btn" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#25d366,#128c7e);color:#fff;border:none;text-decoration:none">💬 WhatsApp</a>
+      <a class="big-btn" href="${c.email?'mailto:'+c.email:'#'}" onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#4a85f5,#2d6cdf);color:#fff;border:none;text-decoration:none;opacity:${c.email?1:0.4}">✉️ Email</a>
+    </div>
+    <div class="big-btns" style="margin-top:6px">
+      <a class="big-btn" href="https://meet.google.com/new" target="_blank" onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#00897b,#00695c);color:#fff;border:none;text-decoration:none">📹 Meet</a>
+      <a class="big-btn" href="https://zoom.us/start/videomeeting" target="_blank" onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#2d8cff,#0e72ed);color:#fff;border:none;text-decoration:none">🎥 Zoom</a>
     </div>
     <div class="dp-sec">
       <div class="dp-sec-title">${lang==='es'?'Contacto':'Contact'}</div>
