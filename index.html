@@ -1473,7 +1473,7 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
   <!-- Row 2: WhatsApp + Email -->
   <div class="popup-main-btns" style="margin-top:6px">
     <a class="pop-btn" id="popupWaLink" target="_blank" style="background:linear-gradient(135deg,#25d366,#128c7e);color:#fff">💬 WhatsApp</a>
-    <a class="pop-btn" id="popupEmailLink" style="background:linear-gradient(135deg,#4a85f5,#2d6cdf);color:#fff">✉️ Email</a>
+    <button class="pop-btn" id="popupEmailLink" onclick="var h=this.dataset.email;if(h){window.location.href='mailto:'+h;}else{alert('Sin email registrado');}" style="background:linear-gradient(135deg,#4a85f5,#2d6cdf);color:#fff;cursor:pointer">✉️ Email</button>
   </div>
   <!-- Row 3: Meet + Zoom -->
   <div class="popup-main-btns" style="margin-top:6px">
@@ -2005,7 +2005,7 @@ function renderClients(){
       <div class="act-btns" onclick="event.stopPropagation()">
         <a class="act-btn btn-call" href="tel:${c.phone?c.phone.replace(/\D/g,''):''}" title="Llamar">📞</a>
         <a class="act-btn btn-wa" href="https://wa.me/${c.phone?c.phone.replace(/\D/g,''):''}" target="_blank" title="WhatsApp" style="background:rgba(37,211,102,.15);color:#25d366">💬</a>
-        <button class="act-btn btn-email" onclick="(function(){var cl=clients.find(function(x){return x.id===${c.id};});var em=cl?cl.email:'';if(em){window.location='mailto:'+em;}else{alert('Sin email registrado');}})();" title="Email" style="background:rgba(74,133,245,.15);color:#4a85f5;${c.email?'':'opacity:0.4;'}">📧</button>
+        <button class="act-btn btn-email" onclick="openEmail(${c.id})" title="Email" style="background:rgba(74,133,245,.15);color:#4a85f5;${c.email?'':' opacity:0.4;'}">📧</button>
         <a class="act-btn btn-meet" href="https://meet.google.com/new" target="_blank" title="Google Meet" style="background:rgba(0,137,123,.15);color:#00897b">📹</a>
         <a class="act-btn btn-zoom" href="https://zoom.us/start/videomeeting" target="_blank" title="Zoom" style="background:rgba(45,140,255,.15);color:#2d8cff">🎥</a>
         <button class="act-btn btn-sms" onclick="showPopup(event,${c.id})" title="SMS / Plantillas">💬</button>
@@ -2514,6 +2514,16 @@ function addHist(id){ const note=(document.getElementById('histNote')||{value:''
 function reschedule(id){ const c=clients.find(x=>x.id===id); const v=(document.getElementById('reschedule')||{value:''}).value; if(c&&v){c.nextCall=v;saveAll();renderAll();openDetail(id);showToast(tr('saved'));} }
 function saveNotes(id){ const c=clients.find(x=>x.id===id); if(c){c.notes=(document.getElementById('clientNotes')||{value:''}).value;saveAll();showToast(tr('saved'));} }
 function copyText(t){ navigator.clipboard&&navigator.clipboard.writeText(t).then(()=>showToast(tr('copied'))); }
+function openEmail(id){
+  var c = clients.find(function(x){ return x.id === id; });
+  if (!c) return;
+  if (!c.email || c.email.trim()==='') {
+    alert(lang==='es' ? 'Sin email registrado. Edita el cliente para agregar uno.' : 'No email registered. Edit the client to add one.');
+    return;
+  }
+  window.location.href = 'mailto:' + c.email;
+}
+
 function deleteClient(id){
   if(!isOwner() && !(_userProfile && _userProfile.perms && _userProfile.perms['delete'])){
     showToast('❌ Solo el admin puede borrar clientes'); return;
@@ -2629,11 +2639,9 @@ function showPopup(event,id){
   document.getElementById('popupWaLink').href=`https://wa.me/${digits}`;
   var emailEl = document.getElementById('popupEmailLink');
   if (emailEl) {
-    emailEl.href = c.email ? 'mailto:' + c.email : '#';
+    emailEl.dataset.email = c.email || '';
     emailEl.style.opacity = c.email ? '1' : '0.4';
-    emailEl.style.pointerEvents = c.email ? 'auto' : 'none';
-    emailEl.title = c.email ? 'Enviar email a: ' + c.email : 'Sin email registrado';
-    emailEl.removeAttribute('target');
+    emailEl.title = c.email ? 'Email: ' + c.email : 'Sin email registrado';
   }
   var meetName = encodeURIComponent((c.name||'cliente').replace(/\s+/g,'-').toLowerCase());
   document.getElementById('popupMeetLink').href = `https://meet.google.com/new`;
