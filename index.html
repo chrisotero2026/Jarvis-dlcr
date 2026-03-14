@@ -2124,7 +2124,12 @@ function renderFolders() {
   _teamMembers.forEach(function(m) {
     if (m.uid === _fbUserId) return;
     if (!isOwner() && m.managerId !== _fbUserId) return;
-    var mCount = clients.filter(function(c){ return c.ownedBy === m.uid; }).length;
+    var mCount = clients.filter(function(c){
+      // Count: clients owned by this agent + clients shared with this agent
+      if (c.ownedBy === m.uid) return true;
+      if (c.sharedWith && c.sharedWith.indexOf(m.uid) !== -1) return true;
+      return false;
+    }).length;
     folders.push({ uid: m.uid, name: m.name || m.email || m.uid, count: mCount, role: m.role });
   });
 
@@ -2189,11 +2194,17 @@ function renderClients(){
   // Apply folder filter (owner/manager)
   if (_folderFilter !== null) {
     if (_folderFilter === '__shared__') {
+      // Show all clients that have been shared with anyone
       list = list.filter(function(c){ return c.sharedWith && c.sharedWith.length > 0; });
+    } else if (_folderFilter === _fbUserId) {
+      // My folder: clients I own
+      list = list.filter(function(c){ return !c.ownedBy || c.ownedBy === _fbUserId; });
     } else {
+      // Agent folder: clients owned by agent OR shared WITH that agent
       list = list.filter(function(c){
-        return !c.ownedBy ? _folderFilter === _fbUserId
-             : c.ownedBy === _folderFilter;
+        if (c.ownedBy === _folderFilter) return true;
+        if (c.sharedWith && c.sharedWith.indexOf(_folderFilter) !== -1) return true;
+        return false;
       });
     }
   }
@@ -2724,7 +2735,8 @@ function openDetail(id){
     <div class="big-btns" style="margin-top:6px">
       <a class="big-btn" href="https://wa.me/${c.phone.replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#25d366,#128c7e);color:#fff;border:none;text-decoration:none">💬 WhatsApp</a>
       <a class="big-btn" href="${c.email?'mailto:'+c.email:'#'}" onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#4a85f5,#2d6cdf);color:#fff;border:none;text-decoration:none;opacity:${c.email?1:0.4}">✉️ Email</a>
-      ${(isOwner()||(_userProfile&&(_userProfile.role==='manager'||_userProfile.role==='supervisor'))) ? '<button class="big-btn" onclick="openShareClientModal('+c.id+')" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3)">🔗 '+(lang==='es'?'Compartir':'Share')+((c.sharedWith&&c.sharedWith.length)?(' ('+c.sharedWith.length+')'):'')+'</button>' : ''}
+      ${(isOwner()||(_userProfile&&(_userProfile.role==='manager'||_userProfile.role==='supervisor'))) ? '<button class="big-btn" onclick="openShareClientModal('+c.id+')" style="background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3)">🔗 Compartir'+(c.sharedWith&&c.sharedWith.length?' ('+c.sharedWith.length+')':'')+' </button>' : ''}
+      ${(isOwner()||(_userProfile&&(_userProfile.role==='manager'||_userProfile.role==='supervisor')))&&c.sharedWith&&c.sharedWith.length ? '<button class="big-btn" onclick="openStopSharingModal('+c.id+')" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3)">🚫 Dejar de compartir</button>' : ''}
       ${c._isSharedCopy ? '<div class="big-btn" style="background:rgba(34,197,94,.08);color:#22c55e;border:1px solid rgba(34,197,94,.2);font-size:12px">🔗 Compartido por '+(c._sharedFromName||'Owner')+'</div>' : ''}
       ${isOwner() && c.ownedBy && c.ownedBy !== _fbUserId ? '<button class="big-btn" onclick="openTransferClientModal('+c.id+')" style="background:rgba(240,165,0,.1);color:var(--gold);border:1px solid rgba(240,165,0,.25)">↗️ Transferir</button>' : ''}
     </div>
@@ -2781,6 +2793,79 @@ function addHist(id){ const note=(document.getElementById('histNote')||{value:''
 function reschedule(id){ const c=clients.find(x=>x.id===id); const v=(document.getElementById('reschedule')||{value:''}).value; if(c&&v){c.nextCall=v;saveAll();renderAll();openDetail(id);showToast(tr('saved'));} }
 function saveNotes(id){ const c=clients.find(x=>x.id===id); if(c){c.notes=(document.getElementById('clientNotes')||{value:''}).value;saveAll();showToast(tr('saved'));} }
 function copyText(t){ navigator.clipboard&&navigator.clipboard.writeText(t).then(()=>showToast(tr('copied'))); }
+// ── Stop sharing modal ──
+function openStopSharingModal(clientId) {
+  var c = clients.find(function(x) { return x.id === clientId; });
+  if (!c || !c.sharedWith || !c.sharedWith.length) return;
+  var sharedWith  = c.sharedWith.slice();
+  var sharedNames = c.sharedWithNames || {};
+
+  var overlay = document.createElement('div');
+  overlay.id = 'shareClientOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) closeShareModal(); });
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--card);border:1px solid rgba(255,255,255,.12);border-radius:18px;width:min(400px,92vw);padding:22px';
+
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px';
+  var htitle = document.createElement('div');
+  htitle.innerHTML = '<div style="font-size:16px;font-weight:800">🚫 Dejar de Compartir</div>'
+    + '<div style="font-size:12px;color:var(--muted);margin-top:2px">'+c.name+'</div>';
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 12px;color:inherit;font-size:15px;cursor:pointer';
+  closeBtn.onclick = closeShareModal;
+  hdr.appendChild(htitle); hdr.appendChild(closeBtn);
+  box.appendChild(hdr);
+
+  var desc = document.createElement('div');
+  desc.style.cssText = 'font-size:12px;color:var(--muted);margin-bottom:12px';
+  desc.textContent = 'Quitar acceso a:';
+  box.appendChild(desc);
+
+  sharedWith.forEach(function(uid) {
+    var name = sharedNames[uid] || uid;
+    var row  = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;margin-bottom:8px';
+    var info = document.createElement('div');
+    info.style.cssText = 'display:flex;align-items:center;gap:8px';
+    info.innerHTML = '<span style="font-size:18px">👤</span>'
+      + '<div><div style="font-size:13px;font-weight:700">'+name+'</div>'
+      + '<div style="font-size:11px;color:#22c55e">✅ Tiene acceso</div></div>';
+    var rmBtn = document.createElement('button');
+    rmBtn.innerHTML = '🚫 Quitar acceso';
+    rmBtn.style.cssText = 'background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit';
+    rmBtn.addEventListener('click', (function(u, n){
+      return function(){
+        unshareClient(clientId, u);
+        closeShareModal();
+        showToast('✅ Acceso removido a ' + n);
+      };
+    })(uid, name));
+    row.appendChild(info); row.appendChild(rmBtn);
+    box.appendChild(row);
+  });
+
+  if (sharedWith.length > 1) {
+    var allBtn = document.createElement('button');
+    allBtn.innerHTML = '🚫 Quitar acceso a TODOS (' + sharedWith.length + ')';
+    allBtn.style.cssText = 'width:100%;margin-top:4px;padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:#ef4444;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit';
+    allBtn.addEventListener('click', function(){
+      if(confirm('¿Quitar acceso a todas las ' + sharedWith.length + ' personas?')) {
+        sharedWith.forEach(function(u){ unshareClient(clientId, u); });
+        closeShareModal();
+        showToast('✅ Acceso removido a todos');
+      }
+    });
+    box.appendChild(allBtn);
+  }
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
 // ── Share client modal ──
 function openShareClientModal(clientId) {
   var c = clients.find(function(x) { return x.id === clientId; });
