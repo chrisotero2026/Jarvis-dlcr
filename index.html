@@ -291,7 +291,7 @@ tbody td{padding:12px 14px;vertical-align:middle;font-size:13px;}
 .tbl-footer{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:var(--card2);border-top:1px solid var(--border);font-size:13px;color:var(--muted);flex-wrap:wrap;gap:8px;}
 
 /* CONTACT POPUP */
-.c-popup{position:fixed;z-index:600;background:var(--card2);border:1px solid rgba(240,165,0,.5);border-radius:14px;padding:18px 18px 14px;width:320px;box-shadow:0 20px 60px rgba(0,0,0,.75);display:none;}
+.c-popup{position:fixed;z-index:600;background:var(--card2);border:1px solid rgba(240,165,0,.5);border-radius:14px;padding:18px 18px 14px;width:320px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.75);display:none;}
 .c-popup.show{display:block;animation:popIn .18s ease;}
 @keyframes popIn{from{opacity:0;transform:scale(.92) translateY(5px)}to{opacity:1;transform:scale(1)}}
 .popup-x{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;}
@@ -2403,11 +2403,12 @@ function showPopup(event,id){
   const popup=document.getElementById('cPopup');
   popup.style.display='block'; popup.classList.add('show');
   const rect=event.currentTarget.getBoundingClientRect();
-  const pw=280,ph=340;
+  const pw=320, ph=480;
   let left=rect.right-pw, top=rect.top-ph-10;
-  if(left<8)left=8;
-  if(top<8)top=rect.bottom+10;
-  if(left+pw>window.innerWidth-8)left=window.innerWidth-pw-8;
+  if(left<8) left=8;
+  if(top<8) top=rect.bottom+10;
+  if(top+ph>window.innerHeight-8) top=window.innerHeight-ph-8;
+  if(left+pw>window.innerWidth-8) left=window.innerWidth-pw-8;
   popup.style.left=left+'px'; popup.style.top=top+'px';
 }
 function showPopupFromDetail(id,btn){ const fakeEvent={stopPropagation:()=>{},currentTarget:btn}; showPopup(fakeEvent,id); }
