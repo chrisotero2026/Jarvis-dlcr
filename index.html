@@ -2801,6 +2801,7 @@ function importCSV(event) {
       var stageMap = {'lead':'lead','contactado':'contacted','contacted':'contacted','calificado':'qualified','qualified':'qualified','negociación':'negotiation','negociacion':'negotiation','negotiation':'negotiation','bajo contrato':'contract','contract':'contract','cerrado':'closed','closed':'closed'};
 
       var imported = 0, skipped = 0, errors = 0;
+      var duplicates = [];
 
       for (var i = 1; i < lines.length; i++) {
         try {
@@ -2873,25 +2874,36 @@ function importCSV(event) {
             closeDate: format === 'dlcr' ? (cols[10]||'') : ''
           };
 
-          // Skip duplicates
-          var isDup = clients.find(function(x){
-            var samePhone = phone && x.phone && x.phone.replace(/\D/g,'') === phone.replace(/\D/g,'') && phone.replace(/\D/g,'').length > 6;
+          // Check duplicates
+          var dupIdx = -1;
+          for (var di = 0; di < clients.length; di++) {
+            var x = clients[di];
+            var samePhone = phone && phone.replace(/\D/g,'').length > 6 &&
+                            x.phone && x.phone.replace(/\D/g,'') === phone.replace(/\D/g,'');
             var sameName  = x.name.toLowerCase().trim() === name.toLowerCase().trim();
-            return sameName || samePhone;
-          });
-          if (isDup) { skipped++; continue; }
+            if (sameName || samePhone) { dupIdx = di; break; }
+          }
 
-          clients.push(c);
-          imported++;
+          if (dupIdx !== -1) {
+            duplicates.push({ existing: clients[dupIdx], incoming: c, idx: dupIdx });
+          } else {
+            clients.push(c);
+            imported++;
+          }
         } catch(rowErr) { errors++; }
       }
 
-      saveAll(); renderAll();
-      var fmtLabel = format === 'outlook' ? ' (Outlook)' : format === 'google' ? ' (Google)' : ' (DLCR)';
-      var msg = '✅ ' + imported + ' importados' + fmtLabel;
-      if (skipped) msg += ' · ' + skipped + ' duplicados';
-      if (errors)  msg += ' · ' + errors + ' errores';
-      showToast(msg);
+      // Handle duplicates
+      if (duplicates.length > 0) {
+        saveAll(); renderAll();
+        showDuplicateImportModal(duplicates, imported, skipped, errors, format);
+      } else {
+        saveAll(); renderAll();
+        var fmtLabel = format === 'outlook' ? ' (Outlook)' : format === 'google' ? ' (Google)' : ' (DLCR)';
+        var msg = '✅ ' + imported + ' importados' + fmtLabel;
+        if (errors) msg += ' · ' + errors + ' errores';
+        showToast(msg);
+      }
 
     } catch(err) {
       showToast('❌ Error: ' + err.message);
@@ -2900,6 +2912,112 @@ function importCSV(event) {
     event.target.value = '';
   };
   reader.readAsText(file, 'UTF-8');
+}
+
+// ── Duplicate Import Handler ──
+function showDuplicateImportModal(duplicates, imported, skipped, errors, format) {
+  var isEs = lang === 'es';
+  var current = 0;
+
+  function showNext() {
+    if (current >= duplicates.length) {
+      // All done
+      saveAll(); renderAll();
+      var fmtLabel = format === 'outlook' ? ' (Outlook)' : format === 'google' ? ' (Google)' : ' (DLCR)';
+      var msg = '✅ ' + imported + ' importados' + fmtLabel;
+      if (skipped) msg += ' · ' + skipped + ' omitidos';
+      if (errors)  msg += ' · ' + errors + ' errores';
+      showToast(msg);
+      closeGenModal();
+      return;
+    }
+
+    var dup = duplicates[current];
+    var ex  = dup.existing;
+    var inc = dup.incoming;
+
+    var h = '<div>';
+    h += '<div style="font-size:15px;font-weight:800;margin-bottom:6px">⚠️ ' + (isEs ? 'Contacto duplicado' : 'Duplicate contact') + '</div>';
+    h += '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">' + (current+1) + ' de ' + duplicates.length + '</div>';
+
+    // Side by side comparison
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">';
+    // Existing
+    h += '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px">';
+    h += '<div style="font-size:10px;font-weight:800;color:var(--muted);margin-bottom:6px">📋 ' + (isEs?'EN EL CRM':'IN CRM') + '</div>';
+    h += '<div style="font-weight:700;font-size:13px;margin-bottom:4px">' + ex.name + '</div>';
+    h += '<div style="font-size:12px;color:var(--muted)">📞 ' + (ex.phone||'—') + '</div>';
+    h += '<div style="font-size:12px;color:var(--muted)">✉️ ' + (ex.email||'—') + '</div>';
+    h += '<div style="font-size:12px;color:var(--muted)">📍 ' + (ex.address||'—') + '</div>';
+    h += '</div>';
+    // Incoming
+    h += '<div style="background:rgba(240,165,0,.05);border:1px solid rgba(240,165,0,.2);border-radius:8px;padding:10px">';
+    h += '<div style="font-size:10px;font-weight:800;color:var(--gold);margin-bottom:6px">📥 ' + (isEs?'NUEVO':'NEW') + '</div>';
+    h += '<div style="font-weight:700;font-size:13px;margin-bottom:4px">' + inc.name + '</div>';
+    h += '<div style="font-size:12px;color:var(--muted)">📞 ' + (inc.phone||'—') + '</div>';
+    h += '<div style="font-size:12px;color:var(--muted)">✉️ ' + (inc.email||'—') + '</div>';
+    h += '<div style="font-size:12px;color:var(--muted)">📍 ' + (inc.address||'—') + '</div>';
+    h += '</div>';
+    h += '</div>';
+
+    // Buttons
+    h += '<div style="display:flex;flex-direction:column;gap:8px">';
+    // Merge
+    h += '<button onclick="handleDupChoice('merge')" style="width:100%;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit">🔀 ' + (isEs?'Fusionar — combinar ambos':'Merge — combine both') + '</button>';
+    // Keep existing
+    h += '<button onclick="handleDupChoice('skip')" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">⏭️ ' + (isEs?'Omitir — mantener el del CRM':'Skip — keep CRM version') + '</button>';
+    // Replace
+    h += '<button onclick="handleDupChoice('replace')" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);color:#ef4444;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">🔄 ' + (isEs?'Reemplazar — usar el nuevo':'Replace — use new one') + '</button>';
+    // Apply to all
+    if (duplicates.length - current > 1) {
+      h += '<div style="border-top:1px solid var(--border);padding-top:8px;display:flex;gap:6px">';
+      h += '<button onclick="handleDupChoice('merge-all')" style="flex:1;padding:8px;border-radius:7px;border:none;background:rgba(34,197,94,.15);color:#22c55e;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit">🔀 ' + (isEs?'Fusionar todos':'Merge all') + '</button>';
+      h += '<button onclick="handleDupChoice('skip-all')" style="flex:1;padding:8px;border-radius:7px;border:1px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);font-weight:700;font-size:11px;cursor:pointer;font-family:inherit">⏭️ ' + (isEs?'Omitir todos':'Skip all') + '</button>';
+      h += '<button onclick="handleDupChoice('replace-all')" style="flex:1;padding:8px;border-radius:7px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);color:#ef4444;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit">🔄 ' + (isEs?'Reemplazar todos':'Replace all') + '</button>';
+      h += '</div>';
+    }
+    h += '</div></div>';
+    openGenModal(h);
+  }
+
+  function mergeDup(dup) {
+    var ex = dup.existing;
+    var inc = dup.incoming;
+    // Fill missing fields from incoming
+    if (!ex.phone && inc.phone)   ex.phone   = inc.phone;
+    if (!ex.email && inc.email)   ex.email   = inc.email;
+    if (!ex.address && inc.address) ex.address = inc.address;
+    if (!ex.notes && inc.notes)   ex.notes   = inc.notes;
+    // If incoming has better/more complete phone
+    if (inc.phone && inc.phone.length > (ex.phone||'').length) ex.phone = inc.phone;
+    imported++;
+  }
+
+  window.handleDupChoice = function(choice) {
+    if (choice === 'merge') {
+      mergeDup(duplicates[current]);
+      current++; showNext();
+    } else if (choice === 'skip') {
+      skipped++; current++; showNext();
+    } else if (choice === 'replace') {
+      clients[duplicates[current].idx] = duplicates[current].incoming;
+      imported++; current++; showNext();
+    } else if (choice === 'merge-all') {
+      for (var mi = current; mi < duplicates.length; mi++) mergeDup(duplicates[mi]);
+      current = duplicates.length; showNext();
+    } else if (choice === 'skip-all') {
+      skipped += duplicates.length - current;
+      current = duplicates.length; showNext();
+    } else if (choice === 'replace-all') {
+      for (var ri = current; ri < duplicates.length; ri++) {
+        clients[duplicates[ri].idx] = duplicates[ri].incoming;
+        imported++;
+      }
+      current = duplicates.length; showNext();
+    }
+  };
+
+  showNext();
 }
 
 // ── Import JSON backup ──
