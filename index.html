@@ -1883,7 +1883,6 @@ async function doSave() {
     try {
       var fb = window._firebase;
       // Every user (including owner) saves ONLY their own clients to crm/{uid}
-      // Owner sees everyone's clients merged in memory but only saves their own
       var myOwnClients = clients.filter(function(c) {
         return !c.ownedBy || c.ownedBy === _fbUserId;
       });
@@ -1900,6 +1899,42 @@ async function doSave() {
       };
       var ref = fb.doc(_fbDb, 'crm', _fbUserId);
       await fb.setDoc(ref, myData);
+
+      // If owner: sync updated shared-copy clients to each agent's bucket
+      if (isOwner()) {
+        var sharedClients = clients.filter(function(c) {
+          return c.sharedWith && c.sharedWith.length > 0 && (!c.ownedBy || c.ownedBy === _fbUserId);
+        });
+        if (sharedClients.length > 0) {
+          // Group by agent uid
+          var byAgent = {};
+          sharedClients.forEach(function(c) {
+            (c.sharedWith || []).forEach(function(agentUid) {
+              if (!byAgent[agentUid]) byAgent[agentUid] = [];
+              byAgent[agentUid].push(c);
+            });
+          });
+          for (var agentUid in byAgent) {
+            try {
+              var aRef   = fb.doc(_fbDb, 'crm', agentUid);
+              var aSnap  = await fb.getDoc(aRef);
+              var aData  = aSnap.exists() ? aSnap.data() : {};
+              var aCls   = (aData.clients || []);
+              byAgent[agentUid].forEach(function(c) {
+                var copy = Object.assign({}, c, {
+                  _sharedFrom:     _fbUserId,
+                  _sharedFromName: (_fbUser && (_fbUser.displayName || _fbUser.email)) || 'Owner',
+                  _isSharedCopy:   true
+                });
+                var idx = aCls.findIndex(function(x){ return x.id === c.id && x._isSharedCopy; });
+                if (idx !== -1) aCls[idx] = copy;
+                else aCls.push(copy);
+              });
+              await fb.setDoc(aRef, Object.assign({}, aData, { clients: aCls }));
+            } catch(ex) { console.warn('sync shared to agent', agentUid, ex); }
+          }
+        }
+      }
       if (dot) { dot.className = 'saving-dot saved'; setTimeout(function(){ if(dot) dot.className='saving-dot'; }, 1800); }
     } catch(ex) {
       console.warn('Firebase save failed:', ex);
@@ -2216,7 +2251,7 @@ function renderClients(){
     return `<div class="card ${brd}" onclick="openDetail(${c.id})">
       <div class="temp-ico ${tempCls[c.temp]}">${tempEmoji[c.temp]}</div>
       <div>
-        <div class="c-name">${c.name}${(isOwner()||(_userProfile&&(_userProfile.role==='manager')))&&c.ownedBy&&c.ownedBy!==_fbUserId?'<span style="font-size:9px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3);padding:1px 6px;border-radius:20px;margin-left:5px">👤 '+(c.ownedByName||c.ownedBy.slice(0,8))+'</span>':''}${c.sharedWith&&c.sharedWith.length?'<span style="font-size:9px;font-weight:700;background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.25);padding:1px 6px;border-radius:20px;margin-left:3px">🔗</span>':''}</div>
+        <div class="c-name">${c.name}${(isOwner()||(_userProfile&&(_userProfile.role==='manager')))&&c.ownedBy&&c.ownedBy!==_fbUserId?'<span style="font-size:9px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3);padding:1px 6px;border-radius:20px;margin-left:5px">👤 '+(c.ownedByName||c.ownedBy.slice(0,8))+'</span>':''}${c._isSharedCopy?'<span style="font-size:9px;font-weight:700;background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.25);padding:1px 6px;border-radius:20px;margin-left:3px">🔗 '+(c._sharedFromName||'Owner')+'</span>':c.sharedWith&&c.sharedWith.length?'<span style="font-size:9px;font-weight:700;background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.25);padding:1px 6px;border-radius:20px;margin-left:3px">🔗</span>':''}</div>
         <div class="c-meta">
           <span class="tag ${typeTagCls[c.type]}">${T[lang].types[c.type]||c.type}</span>
           ${c.rate?`<span class="c-sm">📊 ${c.rate}%</span>`:''}
@@ -4183,9 +4218,11 @@ function getVisibleClients() {
     });
   }
 
-  // Agent: ONLY their own clients (strict)
+  // Agent: their own clients + shared copies (which are in their bucket)
   return clients.filter(function(c) {
-    if (!c.ownedBy) return false; // legacy clients without owner → NOT shown to agents
+    // Shared copy written directly into agent's bucket
+    if (c._isSharedCopy) return true;
+    if (!c.ownedBy) return false;
     return c.ownedBy === myUid
         || (c.sharedWith && c.sharedWith.indexOf(myUid) !== -1);
   });
@@ -4211,25 +4248,71 @@ async function shareClientWith(clientId, targetUid, targetName) {
   var c = clients.find(function(x) { return x.id === clientId; });
   if (!c) return;
   if (!c.sharedWith) c.sharedWith = [];
-  if (c.sharedWith.indexOf(targetUid) === -1) {
-    c.sharedWith.push(targetUid);
-    c.sharedWithNames = c.sharedWithNames || {};
-    c.sharedWithNames[targetUid] = targetName;
-    saveAll();
-    renderAll();
-    showToast('✅ Cliente compartido con ' + targetName);
-  } else {
+  if (c.sharedWith.indexOf(targetUid) !== -1) {
     showToast('ℹ️ Ya compartido con ' + targetName);
+    return;
   }
+  c.sharedWith.push(targetUid);
+  c.sharedWithNames = c.sharedWithNames || {};
+  c.sharedWithNames[targetUid] = targetName;
+
+  // Save owner's bucket (updates the sharedWith list on the original client)
+  saveAll();
+
+  // Also write this client into the target agent's Firebase bucket
+  // so the agent can actually see it when they load their data
+  if (_fbDb) {
+    try {
+      var fb      = window._firebase;
+      var aRef    = fb.doc(_fbDb, 'crm', targetUid);
+      var aSnap   = await fb.getDoc(aRef);
+      var aData   = aSnap.exists() ? aSnap.data() : {};
+      var aClients = (aData.clients || []);
+      // Build a copy of the client tagged as shared
+      var sharedCopy = Object.assign({}, c, {
+        _sharedFrom:     _fbUserId,
+        _sharedFromName: (_fbUser && (_fbUser.displayName || _fbUser.email)) || 'Owner',
+        _isSharedCopy:   true
+      });
+      // Upsert: replace if already there, otherwise add
+      var existIdx = aClients.findIndex(function(x){ return x.id === sharedCopy.id; });
+      if (existIdx !== -1) aClients[existIdx] = sharedCopy;
+      else aClients.push(sharedCopy);
+      await fb.setDoc(aRef, Object.assign({}, aData, { clients: aClients }));
+      showToast('✅ Cliente compartido con ' + targetName);
+    } catch(ex) {
+      console.warn('shareClientWith Firebase write:', ex);
+      showToast('✅ Compartido (sin sync inmediato)');
+    }
+  } else {
+    showToast('✅ Cliente compartido con ' + targetName);
+  }
+  renderAll();
 }
 
 // ── Remove share ──
-function unshareClient(clientId, targetUid) {
+async function unshareClient(clientId, targetUid) {
   var c = clients.find(function(x) { return x.id === clientId; });
   if (!c || !c.sharedWith) return;
   c.sharedWith = c.sharedWith.filter(function(u) { return u !== targetUid; });
   if (c.sharedWithNames) delete c.sharedWithNames[targetUid];
   saveAll();
+
+  // Remove shared copy from the agent's bucket
+  if (_fbDb) {
+    try {
+      var fb     = window._firebase;
+      var aRef   = fb.doc(_fbDb, 'crm', targetUid);
+      var aSnap  = await fb.getDoc(aRef);
+      if (aSnap.exists()) {
+        var aData    = aSnap.data();
+        var aClients = (aData.clients || []).filter(function(x) {
+          return !(x.id === clientId && x._isSharedCopy);
+        });
+        await fb.setDoc(aRef, Object.assign({}, aData, { clients: aClients }));
+      }
+    } catch(ex) { console.warn('unshareClient Firebase remove:', ex); }
+  }
   renderAll();
   showToast('✅ Acceso removido');
 }
