@@ -3966,8 +3966,8 @@ var ROLE_LABELS = {
 // Default tab permissions per role (owner always sees everything)
 var DEFAULT_PERMS = {
   manager:    { clients:true, addClient:true,  editClient:true,  delete:false, pipeline:true,  movePipeline:true,  income:true,  addIncome:true,  table:true,  mortgage:true, team:true,  forecast:true,  export:false, merge:true,  jarvis:true, calendar:true, myincome:true  },
-  supervisor: { clients:true, addClient:true,  editClient:true,  delete:false, pipeline:true,  movePipeline:true,  income:false, addIncome:false, table:true,  mortgage:true, team:true,  forecast:false, export:false, merge:false, jarvis:true, calendar:true },
-  agent:      { clients:true, addClient:false, editClient:false, delete:false, pipeline:false, movePipeline:false, income:false, addIncome:false, table:false, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true, calendar:true, myincome:true }
+  supervisor: { clients:true, addClient:true,  editClient:true,  delete:false, pipeline:true,  movePipeline:true,  income:false, addIncome:false, table:true,  mortgage:true, team:true,  forecast:false, export:false, merge:false, jarvis:true, calendar:true, myincome:false },
+  agent:      { clients:true, addClient:true,  editClient:true,  delete:false, pipeline:true,  movePipeline:true,  income:false, addIncome:false, table:false, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true, calendar:true, myincome:false }
 };
 
 // Current user profile loaded from Firestore
@@ -3984,12 +3984,7 @@ async function loadUserProfile(uid) {
     if (snap.exists()) {
       _userProfile = snap.data();
       _userProfile.uid = uid;
-      // Patch income permission for existing agents who may have income:false
-      if (_userProfile.role !== 'owner' && _userProfile.perms && _userProfile.perms.income === false) {
-        _userProfile.perms.income    = true;
-        _userProfile.perms.addIncome = true;
-        try { await fb.setDoc(fb.doc(_fbDb,'users',uid), {perms: _userProfile.perms}, {merge:true}); } catch(e){}
-      }
+      // (income permission patch removed — respect owner's settings)
       // Update last login time
       try { await fb.setDoc(fb.doc(_fbDb,'users',uid), {lastLogin: Date.now()}, {merge:true}); } catch(e){}
     } else {
@@ -4002,7 +3997,7 @@ async function loadUserProfile(uid) {
       var newRole  = isFirstUser ? 'owner' : 'agent';
       var newPerms = isFirstUser
         ? { clients:true, pipeline:true, income:true, table:true, mortgage:true, team:true, forecast:true, jarvis:true, calendar:true }
-        : { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:true, addIncome:true, table:true, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true, calendar:true, myincome:true };
+        : { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:false, addIncome:false, table:false, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:false, calendar:false, myincome:false };
       _userProfile = {
         uid:             uid,
         name:            _fbUser.displayName || _fbUser.email,
@@ -4017,7 +4012,7 @@ async function loadUserProfile(uid) {
     }
   } catch(ex) {
     console.warn('loadUserProfile error:', ex);
-    _userProfile = { uid, role:'agent', perms:{ clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:true, addIncome:true, table:true, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true }, approved:true };
+    _userProfile = { uid: uid, role:'agent', perms:{ clients:true, addClient:true, editClient:false, delete:false, pipeline:false, movePipeline:false, income:false, addIncome:false, table:false, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:false, calendar:false }, approved:true };
   }
 }
 
@@ -4042,16 +4037,23 @@ function applyTabPermissions() {
   Object.keys(tabMap).forEach(function(tabId) {
     var el = document.getElementById(tabId);
     if (!el) return;
-    el.style.display = canSee(tabMap[tabId]) ? '' : 'none';
+    var visible = canSee(tabMap[tabId]);
+    el.style.display = visible ? '' : 'none';
   });
-  // Switch to first visible tab
-  var firstVisible = Object.keys(tabMap).find(function(tabId) {
-    var el = document.getElementById(tabId);
-    return el && el.style.display !== 'none';
-  });
-  if (firstVisible) {
-    var tabName = firstVisible.replace('tab-','');
-    switchTab(tabName);
+  // If current active tab is now hidden, switch to first visible
+  var activeTab = document.querySelector('.tab.active');
+  var activeId  = activeTab ? activeTab.id : '';
+  var activeHidden = activeTab && activeTab.style.display === 'none';
+  if (!activeTab || activeHidden) {
+    var firstVisible = Object.keys(tabMap).find(function(tabId) {
+      var el = document.getElementById(tabId);
+      return el && el.style.display !== 'none';
+    });
+    if (firstVisible) {
+      var tabName = firstVisible.replace('tab-','');
+      if (tabName === 'mort') tabName = 'mortgage';
+      switchTab(tabName);
+    }
   }
 }
 
@@ -4299,20 +4301,23 @@ function editMember(uid) {
   var perms = member.perms || DEFAULT_PERMS[member.role] || {};
 
   var permList = [
-    { key:'clients',   label:'👥 Ver Clientes' },
-    { key:'addClient', label:'➕ Agregar Clientes' },
-    { key:'editClient',label:'✏️ Editar Clientes' },
-    { key:'delete',    label:'🗑️ Borrar Clientes' },
-    { key:'pipeline',  label:'📊 Ver Pipeline' },
+    { key:'clients',      label:'👥 Ver Clientes' },
+    { key:'addClient',    label:'➕ Agregar Clientes' },
+    { key:'editClient',   label:'✏️ Editar Clientes' },
+    { key:'delete',       label:'🗑️ Borrar Clientes' },
+    { key:'pipeline',     label:'📊 Ver Pipeline' },
     { key:'movePipeline', label:'🔀 Mover Pipeline' },
-    { key:'income',    label:'📈 Ver Ingresos' },
-    { key:'addIncome', label:'➕ Agregar Ingresos' },
-    { key:'table',     label:'📋 Ver Tabla' },
-    { key:'mortgage',  label:'🧮 Ver Calculadora de Préstamo' },
-    { key:'team',      label:'👥 Ver Equipo' },
-    { key:'forecast',  label:'🔮 Ver Forecast' },
-    { key:'export',    label:'📥 Exportar' },
-    { key:'merge',     label:'🔀 Hacer Merge' },
+    { key:'income',       label:'📈 Ver Ingresos' },
+    { key:'addIncome',    label:'➕ Agregar Ingresos' },
+    { key:'table',        label:'📋 Ver Tabla' },
+    { key:'mortgage',     label:'🧮 Calculadora Préstamo' },
+    { key:'calendar',     label:'📅 Ver Calendario' },
+    { key:'jarvis',       label:'🤖 Jarvis AI' },
+    { key:'team',         label:'👥 Ver Equipo' },
+    { key:'forecast',     label:'🔮 Ver Forecast' },
+    { key:'myincome',     label:'💰 Mis Ingresos' },
+    { key:'export',       label:'📥 Exportar' },
+    { key:'merge',        label:'🔀 Hacer Merge' },
   ];
 
   var html = '<div>'
@@ -4350,9 +4355,9 @@ function editMember(uid) {
 function applyRoleTemplate() {
   var role = document.getElementById('edit-role-sel').value;
   var template = {
-    manager:    { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:true, addIncome:true, table:true, mortgage:true, team:true, forecast:true, export:false, merge:true },
-    supervisor: { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:false, addIncome:false, table:true, mortgage:true, team:true, forecast:false, export:false, merge:false },
-    agent:      { clients:true, addClient:false, editClient:false, delete:false, pipeline:false, movePipeline:false, income:false, addIncome:false, table:false, mortgage:true, team:false, forecast:false, export:false, merge:false },
+    manager:    { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:true, addIncome:true, table:true, mortgage:true, team:true, forecast:true, export:false, merge:true, jarvis:true, calendar:true, myincome:true },
+    supervisor: { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:false, addIncome:false, table:true, mortgage:true, team:true, forecast:false, export:false, merge:false, jarvis:true, calendar:true, myincome:false },
+    agent:      { clients:true, addClient:true, editClient:true, delete:false, pipeline:true, movePipeline:true, income:false, addIncome:false, table:false, mortgage:true, team:false, forecast:false, export:false, merge:false, jarvis:true, calendar:true, myincome:false },
   };
   var perms = template[role] || template['agent'];
   document.querySelectorAll('.perm-chk').forEach(function(chk) {
@@ -4367,9 +4372,28 @@ async function saveMemberPerms(uid) {
   });
   var roleEl = document.getElementById('edit-role-sel');
   var role = roleEl ? roleEl.value : 'agent';
-  await saveUserProfile(uid, { role: role, perms: newPerms });
-  closeGenModal();
-  showToast('✅ Permisos guardados');
+  // Save to Firebase
+  try {
+    var fb  = window._firebase;
+    var ref = fb.doc(_fbDb, 'users', uid);
+    await fb.setDoc(ref, { role: role, perms: newPerms }, { merge: true });
+    // Update local _teamMembers cache
+    var member = _teamMembers.find(function(m) { return m.uid === uid; });
+    if (member) { member.role = role; member.perms = newPerms; }
+    // If editing ourselves, update _userProfile and re-apply
+    if (uid === _fbUserId) {
+      _userProfile.role  = role;
+      _userProfile.perms = newPerms;
+      applyTabPermissions();
+    }
+    await loadTeamMembers();
+    renderAdminPanel();
+    closeGenModal();
+    showToast('✅ Permisos guardados — el agente verá los cambios al recargar');
+  } catch(ex) {
+    showToast('❌ Error al guardar permisos');
+    console.error('saveMemberPerms:', ex);
+  }
 }
 
 function assignClientsModal(uid) {
