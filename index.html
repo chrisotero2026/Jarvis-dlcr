@@ -2005,7 +2005,7 @@ function renderClients(){
       <div class="act-btns" onclick="event.stopPropagation()">
         <a class="act-btn btn-call" href="tel:${c.phone?c.phone.replace(/\D/g,''):''}" title="Llamar">📞</a>
         <a class="act-btn btn-wa" href="https://wa.me/${c.phone?c.phone.replace(/\D/g,''):''}" target="_blank" title="WhatsApp" style="background:rgba(37,211,102,.15);color:#25d366">💬</a>
-        <a class="act-btn btn-email" href="${c.email?'mailto:'+c.email:'#'}" title="${c.email?'Email: '+c.email:'Sin email'}" style="background:rgba(74,133,245,.15);color:#4a85f5;${c.email?'':'opacity:0.35;pointer-events:none'}">📧</a>
+        <button class="act-btn btn-email" onclick="(function(){var cl=clients.find(function(x){return x.id===${c.id};});var em=cl?cl.email:'';if(em){window.location='mailto:'+em;}else{alert('Sin email registrado');}})();" title="Email" style="background:rgba(74,133,245,.15);color:#4a85f5;${c.email?'':'opacity:0.4;'}">📧</button>
         <a class="act-btn btn-meet" href="https://meet.google.com/new" target="_blank" title="Google Meet" style="background:rgba(0,137,123,.15);color:#00897b">📹</a>
         <a class="act-btn btn-zoom" href="https://zoom.us/start/videomeeting" target="_blank" title="Zoom" style="background:rgba(45,140,255,.15);color:#2d8cff">🎥</a>
         <button class="act-btn btn-sms" onclick="showPopup(event,${c.id})" title="SMS / Plantillas">💬</button>
