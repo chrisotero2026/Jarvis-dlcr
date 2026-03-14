@@ -1860,7 +1860,12 @@ function switchTab(tab){
   if(tab==='income')     { renderIncome(); initTxDate(); }
   if(tab==='table')      renderTable();
   if(tab==='mort')       { populateMortClients(); calcMort(); }
-  if(tab==='jarvis')     { jvInit(); }
+  if(tab==='jarvis')     {
+    jvInit();
+    var jvTab = document.getElementById('tab-jarvis');
+    var badge = jvTab && jvTab.querySelector('.jv-notif');
+    if (badge) badge.remove();
+  }
   if(tab==='calendar')   { calRender(); }
   if(tab==='myincome')   { renderMyIncome(); }
 }
@@ -4479,7 +4484,11 @@ function updateUserHeader() {
 // ══════════════════════════════════════════════════════════
 
 var JV_API      = window.location.origin + '/api';
-var jvInited    = false;
+var jvInited       = false;
+var jvHistory      = [];
+var jvLongMem      = [];
+var jvProactiveInt = null;
+var JV_MAX_HISTORY = 20;
 var jvListening = false;
 var jvRec       = null;
 var jvMems      = [];
@@ -5236,9 +5245,13 @@ function jvInit() {
   jvBuildCmds();
   jvCheckStatus();
   jvLoadMem();
+  jvLoadLongMem();
   jvCrmSnap();
   jvCheckVencidos();
   setInterval(jvCheckStatus, 30000);
+  if (jvProactiveInt) clearInterval(jvProactiveInt);
+  jvProactiveInt = setInterval(jvProactiveCheck, 5 * 60 * 1000);
+  setTimeout(jvProactiveCheck, 30000);
 }
 
 // ── Build command buttons ──
@@ -5527,38 +5540,72 @@ var JV_TOOLS = [
 // ── System prompt con contexto completo del CRM ──
 function jvSystemPrompt() {
   var now = new Date();
+  var hour = now.getHours();
   var today = now.toLocaleDateString('es', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   var todayISO = now.toISOString().split('T')[0];
+  var timeGreet = hour < 12 ? 'Buenos dias' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
 
-  // Get next Saturday
   var sat = new Date(now);
-  var day = sat.getDay();
-  var daysToSat = (6 - day + 7) % 7 || 7;
+  var daysToSat = (6 - sat.getDay() + 7) % 7 || 7;
   sat.setDate(sat.getDate() + daysToSat);
   var satISO = sat.toISOString().split('T')[0];
+  var sun = new Date(sat); sun.setDate(sun.getDate() + 1);
+  var sunISO = sun.toISOString().split('T')[0];
 
-  var totalClients = (typeof clients !== 'undefined') ? clients.length : 0;
-  var hotClients   = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.temp==='hot'; }).length : 0;
-  var closedClients= (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.stage==='closed'; }).length : 0;
-  var totalIncome  = (typeof incomeTxs !== 'undefined') ? incomeTxs.reduce(function(s,t){ return s+(t.amount||0); }, 0) : 0;
+  var ownerName = (_fbUser && (_fbUser.displayName || _fbUser.email.split('@')[0])) || 'Jefe';
+  var allClients = (typeof clients !== 'undefined') ? clients : [];
+  var totalClients  = allClients.length;
+  var hotClients    = allClients.filter(function(c){ return c.temp==='hot' && c.stage!=='closed'; }).length;
+  var warmClients   = allClients.filter(function(c){ return c.temp==='warm' && c.stage!=='closed'; }).length;
+  var closedClients = allClients.filter(function(c){ return c.stage==='closed'; }).length;
+  var buyers        = allClients.filter(function(c){ return c.type==='buy' && c.stage!=='closed'; }).length;
+  var sellers       = allClients.filter(function(c){ return c.type==='sell' && c.stage!=='closed'; }).length;
+  var hotDetail     = allClients.filter(function(c){ return c.temp==='hot' && c.stage!=='closed'; })
+    .slice(0,8).map(function(c){ return c.name + '/' + (c.type||'buy') + '/' + (c.stage||'lead'); }).join(' | ');
+  var recentClosed  = allClients.filter(function(c){ return c.stage==='closed'; })
+    .slice(-5).map(function(c){ return c.name + '($' + (c.amount||0).toLocaleString() + ')'; }).join(', ');
 
-  var recentNames = (typeof clients !== 'undefined')
-    ? clients.slice(-5).map(function(c){ return c.name + ' (' + (c.stage||'lead') + ')'; }).join(', ')
-    : 'ninguno';
+  var totalIncome = 0, monthIncome = 0, yearIncome = 0;
+  if (typeof incomeTxs !== 'undefined') {
+    incomeTxs.forEach(function(t) {
+      var amt = t.amount || 0; totalIncome += amt;
+      var d = new Date(t.date + 'T00:00:00');
+      if (d.getFullYear() === now.getFullYear()) { yearIncome += amt;
+        if (d.getMonth() === now.getMonth()) monthIncome += amt; }
+    });
+  }
+
+  var venc = allClients.filter(function(c){ return c.nextCall && c.nextCall < todayISO && c.stage !== 'closed'; });
+  var vencStr = venc.length ? venc.slice(0,5).map(function(c){ return c.name + '(tel:' + c.phone + ',vencido:' + c.nextCall + ')'; }).join(' | ') : 'ninguno';
+  var todayCalls = allClients.filter(function(c){ return c.nextCall === todayISO && c.stage !== 'closed'; });
+  var todayCallStr = todayCalls.length ? todayCalls.map(function(c){ return c.name + '(' + c.phone + ')'; }).join(', ') : 'ninguna';
+  var longMemStr = jvLongMem.length ? jvLongMem.slice(-15).map(function(m){ return '- ' + m; }).join('
+') : 'Sin memoria guardada.';
+  var recentNames = allClients.slice(-5).map(function(c){ return c.name + '(' + (c.stage||'lead') + ')'; }).join(', ');
 
   return [
-    'Eres Jarvis, el asistente de IA del CRM DLCR Real Estate & Loans.',
-    'IDIOMA ACTUAL DE LA INTERFAZ: ' + (typeof lang !== "undefined" ? (lang === "es" ? "ESPAÑOL" : "ENGLISH") : "ESPAÑOL") + '. Responde siempre en ese mismo idioma.',
-    'Hoy es: ' + today + '. Fecha ISO hoy: ' + todayISO + '. Próximo sábado ISO: ' + satISO,
+    'Eres Jarvis, el asistente AI personal de ' + ownerName + ' en DLCR Real Estate & Loans.',
+    'Personalidad: carismatico, directo, inteligente, como un asistente personal de confianza.',
+    'Llamas al usuario Jefe cuando es apropiado. Celebras cierres: Excelente cierre! Eso es dinero!',
+    'Eres proactivo: si ves algo urgente en el CRM, lo mencionas.',
+    'IDIOMA: ' + (typeof lang !== 'undefined' ? (lang === 'es' ? 'ESPANOL' : 'ENGLISH') : 'ESPANOL') + ' — responde SIEMPRE en este idioma.',
+    'Hoy: ' + today + ' | ' + timeGreet + ' | ISO: ' + todayISO,
+    'Sabado: ' + satISO + ' | Domingo: ' + sunISO,
     '',
-    'ESTADO ACTUAL DEL CRM:',
-    '- Total clientes: ' + totalClients,
-    '- Clientes calientes (hot): ' + hotClients,
-    '- Cierres: ' + closedClients,
-    '- Ingresos totales registrados: $' + totalIncome.toLocaleString(),
-    '- Últimos clientes: ' + recentNames,
+    'CRM EN TIEMPO REAL:',
+    'Total=' + totalClients + ' | Calientes=' + hotClients + ' | Tibios=' + warmClients + ' | Cerrados=' + closedClients,
+    'Compradores=' + buyers + ' | Vendedores=' + sellers,
+    'Calientes ahora: ' + (hotDetail || 'ninguno'),
+    'Cierres recientes: ' + (recentClosed || 'ninguno'),
+    'Vencidos (' + venc.length + '): ' + vencStr,
+    'Llamadas hoy: ' + todayCallStr,
+    'Ingresos: Mes=$' + monthIncome.toLocaleString() + ' | Anio=$' + yearIncome.toLocaleString() + ' | Total=$' + totalIncome.toLocaleString(),
+    'Ultimos clientes: ' + recentNames,
     '',
-    'Tu trabajo es interpretar el mensaje del usuario y responder SIEMPRE con un JSON válido.',
+    'MEMORIA PERMANENTE:',
+    longMemStr,
+    '',
+    'Tu trabajo es interpretar el mensaje y responder SIEMPRE con JSON valido.',
     'El JSON debe tener exactamente esta estructura:',
     '{',
     '  "action": "<nombre_de_acción>",',
@@ -5645,12 +5692,14 @@ function jvSystemPrompt() {
     '    params: { type: "buy/sell/refi/loan/referral" }',
     '',
     'REGLAS CRÍTICAS:',
-    '- SIEMPRE responde con JSON válido, sin texto antes ni después, sin markdown, sin ```',
-    '- Para montos con referidos múltiples: refby+refAmount = primer referido, refName2+refAmount2 = segundo',
-    '- Cuando digan "sábado" = ' + satISO + ', "domingo" = calcula correctamente',
-    '- "6pm" = "18:00", "3pm" = "15:00", "10am" = "10:00"',
-    '- Si el mensaje es saludo o pregunta general, usa chat_reply',
-    '- Si falta info crítica (como nombre para agregar cliente), pídela en el reply con confirm:false',
+    '- JSON valido SIEMPRE. Sin texto extra, sin markdown, sin ```',
+    '- Sabado=' + satISO + ' | Domingo=' + sunISO,
+    '- 6pm=18:00, 3pm=15:00, 10am=10:00, 8am=08:00',
+    '- Si falta info critica, pidela con confirm:false',
+    '- Recuerda el contexto de la conversacion anterior',
+    '- Para chat_reply, usa datos reales del CRM para respuestas inteligentes',
+    '- Si el usuario pregunta por un cliente, busca en los datos y da detalles reales',
+    '- Sé proactivo: menciona vencidos o calientes sin cita cuando sea relevante',
   ].join('\n');
 }
 
@@ -5664,34 +5713,114 @@ async function jvSend(override) {
   jvAddMsg('user', msg);
   jvShowTyping();
 
-  // Try to call Jarvis server for NLP interpretation
+  // Level 1: Add to conversation history
+  jvHistory.push({ role: 'user', content: msg });
+  if (jvHistory.length > JV_MAX_HISTORY) jvHistory = jvHistory.slice(-JV_MAX_HISTORY);
+  jvAutoLearn(msg);
+
   try {
     var sysprompt = jvSystemPrompt();
+    var historyMsgs = jvHistory.slice(-10).slice(0, -1);
     var r = await fetch('/api/jarvis/command', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: msg,
-        system:  sysprompt,
-      }),
+      body: JSON.stringify({ message: msg, system: sysprompt, history: historyMsgs }),
       signal: AbortSignal.timeout(30000),
     });
     var d = await r.json();
     jvHideTyping();
-
     var raw = d.raw || d.reply || '';
     var parsed = jvParseResponse(raw);
-
     if (parsed) {
+      jvHistory.push({ role: 'assistant', content: parsed.reply || raw });
+      if (jvHistory.length > JV_MAX_HISTORY) jvHistory = jvHistory.slice(-JV_MAX_HISTORY);
       await jvExecuteAction(parsed, msg);
     } else {
-      // Fallback: try local server
+      jvHistory.push({ role: 'assistant', content: raw });
       await jvFallbackServer(msg);
     }
   } catch(e) {
-    // Fallback to local server
     jvHideTyping();
     await jvFallbackServer(msg);
+  }
+}
+
+// Level 2: Auto-learn
+function jvAutoLearn(msg) {
+  var lower = msg.toLowerCase();
+  var facts = [];
+  if (lower.includes('recuerda que') || lower.includes('remember that') || lower.includes('guarda que') || lower.includes('no olvides')) {
+    facts.push(msg.substring(0, 120));
+  }
+  if (lower.includes('mi comision') || lower.includes('mi porcentaje') || lower.includes('mi split') || lower.includes('my commission')) {
+    facts.push('Negocio: ' + msg.substring(0, 100));
+  }
+  facts.forEach(function(f) {
+    if (!jvLongMem.find(function(m){ return m === f; })) {
+      jvLongMem.push(f);
+      jvSaveLongMem();
+    }
+  });
+}
+
+async function jvSaveLongMem() {
+  try {
+    await fetch('/api/memory/clear', { method: 'POST' });
+    for (var i = 0; i < jvLongMem.length; i++) {
+      await fetch('/api/memory/add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fact: jvLongMem[i] })
+      });
+    }
+  } catch(e) {}
+}
+
+async function jvLoadLongMem() {
+  try {
+    var r = await fetch('/api/memory');
+    var d = await r.json();
+    jvLongMem = d.facts || [];
+  } catch(e) { jvLongMem = []; }
+}
+
+// Level 3: Proactive check
+var _jvLastProactive = 0;
+async function jvProactiveCheck() {
+  if (typeof clients === 'undefined' || !clients.length) return;
+  var now = new Date();
+  var todayISO = now.toISOString().split('T')[0];
+  var hour = now.getHours();
+  var isEs = lang === 'es';
+  var timeSinceLast = Date.now() - _jvLastProactive;
+  if (timeSinceLast < 30 * 60 * 1000) return;
+  var alerts = [];
+  var venc = clients.filter(function(c){ return c.nextCall && c.nextCall < todayISO && c.stage !== 'closed'; });
+  if (venc.length > 0) {
+    alerts.push((isEs ? '<strong>' + venc.length + ' clientes vencidos</strong>: ' : '<strong>' + venc.length + ' overdue clients</strong>: ') +
+      venc.slice(0,3).map(function(c){ return c.name; }).join(', '));
+  }
+  var todayCalls = clients.filter(function(c){ return c.nextCall === todayISO && c.stage !== 'closed'; });
+  if (todayCalls.length > 0 && hour >= 8 && hour <= 10) {
+    alerts.push((isEs ? '<strong>' + todayCalls.length + ' llamadas hoy</strong>: ' : '<strong>' + todayCalls.length + ' calls today</strong>: ') +
+      todayCalls.map(function(c){ return c.name; }).join(', '));
+  }
+  var hotNoCall = clients.filter(function(c){ return c.temp === 'hot' && c.stage !== 'closed' && (!c.nextCall || c.nextCall < todayISO); });
+  if (hotNoCall.length > 0) {
+    alerts.push((isEs ? '<strong>' + hotNoCall.length + ' calientes sin cita</strong>: ' : '<strong>' + hotNoCall.length + ' hot leads, no appointment</strong>: ') +
+      hotNoCall.slice(0,3).map(function(c){ return c.name; }).join(', '));
+  }
+  if (!alerts.length) return;
+  _jvLastProactive = Date.now();
+  var intro = isEs ? 'Jefe, mi reporte:' : 'Boss, my report:';
+  jvAddMsg('bot', '<strong>' + intro + '</strong><br><br>' + alerts.join('<br><br>'), true);
+  var jvTab = document.getElementById('tab-jarvis');
+  if (jvTab && !jvTab.classList.contains('active')) {
+    var badge = jvTab.querySelector('.jv-notif') || document.createElement('span');
+    badge.className = 'jv-notif';
+    badge.textContent = alerts.length;
+    badge.style.cssText = 'position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;pointer-events:none';
+    jvTab.style.position = 'relative';
+    if (!jvTab.querySelector('.jv-notif')) jvTab.appendChild(badge);
   }
 }
 
