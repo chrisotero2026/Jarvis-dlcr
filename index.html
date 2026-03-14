@@ -131,6 +131,9 @@ header { position:relative; }
 .nav-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s;margin-bottom:2px;}
 .nav-item:hover{background:var(--card);color:var(--text);}
 .nav-item.active{background:linear-gradient(135deg,rgba(240,165,0,.15),rgba(240,165,0,.05));color:var(--gold);border:1px solid rgba(240,165,0,.2);}
+.folder-item{font-size:12px;padding:6px 10px;border:1px solid transparent;}
+.folder-item.active{background:rgba(168,85,247,.1);color:#a855f7;border-color:rgba(168,85,247,.25);}
+.folder-item:hover{background:rgba(168,85,247,.06);color:#c084fc;}
 .nav-icon{font-size:14px;width:18px;text-align:center;}
 .sidebar-stats{margin:12px;padding:12px;background:var(--card);border-radius:10px;border:1px solid var(--border);}
 .stat-row{display:flex;justify-content:space-between;margin-bottom:7px;align-items:center;}
@@ -924,6 +927,13 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
 <div class="app">
   <!-- SIDEBAR -->
   <aside class="sidebar">
+    <!-- CARPETAS (owner/manager only) -->
+    <div id="folderSection" style="display:none">
+      <div class="nav-label" style="margin-top:4px">📁 Carpetas</div>
+      <div id="folderList"></div>
+      <div style="border-top:1px solid var(--border);margin:6px 12px"></div>
+    </div>
+    <!-- FILTROS POR TIPO -->
     <div class="nav-section">
       <div class="nav-label" id="lbl-filter">Filtrar</div>
       <div class="nav-item active" id="nav-all" onclick="filterNav('',this)"><span class="nav-icon">📋</span><span id="lbl-all">Todos</span></div>
@@ -2041,6 +2051,7 @@ function switchTab(tab){
 }
 
 function renderAll(){
+  try{renderFolders();}catch(ex){console.warn("rf:",ex);}
   try{renderClients();}catch(ex){console.warn("rc:",ex);}
   try{renderRemBar();}catch(ex){}
   try{updateStats();}catch(ex){};
@@ -2058,11 +2069,99 @@ function renderAll(){
 // ════════════════════════════════════════
 //  CLIENTS VIEW
 // ════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+//  FOLDER SYSTEM (owner/manager sees separate agent folders)
+// ══════════════════════════════════════════════════════
+
+function renderFolders() {
+  var sec  = document.getElementById('folderSection');
+  var list = document.getElementById('folderList');
+  if (!sec || !list) return;
+
+  var isOwnerOrMgr = isOwner() || (_userProfile && (_userProfile.role === 'manager' || _userProfile.role === 'supervisor'));
+  if (!isOwnerOrMgr) { sec.style.display = 'none'; return; }
+
+  var folders = [];
+  var myName  = (_fbUser && (_fbUser.displayName || _fbUser.email)) || 'Mis Clientes';
+  var myCount = clients.filter(function(c){ return !c.ownedBy || c.ownedBy === _fbUserId; }).length;
+  folders.push({ uid: _fbUserId, name: myName, count: myCount, isMe: true });
+
+  _teamMembers.forEach(function(m) {
+    if (m.uid === _fbUserId) return;
+    if (!isOwner() && m.managerId !== _fbUserId) return;
+    var mCount = clients.filter(function(c){ return c.ownedBy === m.uid; }).length;
+    folders.push({ uid: m.uid, name: m.name || m.email || m.uid, count: mCount, role: m.role });
+  });
+
+  var sharedCount = clients.filter(function(c){ return c.sharedWith && c.sharedWith.length > 0; }).length;
+
+  if (folders.length <= 1 && sharedCount === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+
+  var roleIcon = { owner:'👑', manager:'🏆', supervisor:'⭐', agent:'👤' };
+  list.innerHTML = '';
+
+  // All folder
+  var allDiv = document.createElement('div');
+  allDiv.className = 'nav-item folder-item' + (_folderFilter === null ? ' active' : '');
+  allDiv.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
+  allDiv.innerHTML = '<span><span class="nav-icon">🗂️</span> Todos</span>'
+    + '<span style="font-size:10px;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:20px">' + clients.length + '</span>';
+  allDiv.addEventListener('click', function(){ setFolder(null); });
+  list.appendChild(allDiv);
+
+  // Each person's folder
+  folders.forEach(function(f) {
+    var icon  = f.isMe ? (isOwner() ? '👑' : '🏆') : (roleIcon[f.role] || '👤');
+    var label = f.isMe ? 'Mis Clientes' : (f.name || f.uid);
+    var d = document.createElement('div');
+    d.className = 'nav-item folder-item' + (_folderFilter === f.uid ? ' active' : '');
+    d.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
+    d.innerHTML = '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:128px" title="' + label + '">'
+      + '<span class="nav-icon">' + icon + '</span> ' + label + '</span>'
+      + '<span style="font-size:10px;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:20px;flex-shrink:0">' + f.count + '</span>';
+    d.addEventListener('click', (function(uid){ return function(){ setFolder(uid); }; })(f.uid));
+    list.appendChild(d);
+  });
+
+  // Shared folder
+  if (sharedCount > 0) {
+    var sd = document.createElement('div');
+    sd.className = 'nav-item folder-item' + (_folderFilter === '__shared__' ? ' active' : '');
+    sd.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
+    sd.innerHTML = '<span><span class="nav-icon">🔗</span> Compartidos</span>'
+      + '<span style="font-size:10px;background:rgba(34,197,94,.15);color:#22c55e;padding:1px 6px;border-radius:20px">' + sharedCount + '</span>';
+    sd.addEventListener('click', function(){ setFolder('__shared__'); });
+    list.appendChild(sd);
+  }
+}
+function setFolder(uid) {
+  _folderFilter = uid;
+  // Clear type filter when switching folders
+  typeFlt = '';
+  document.querySelectorAll('.nav-item:not(.folder-item)').forEach(function(n) { n.classList.remove('active'); });
+  document.getElementById('nav-all').classList.add('active');
+  renderFolders();
+  renderClients();
+}
+
 function renderClients(){
   const grid=document.getElementById('clientCards');
   const q=document.getElementById('searchInput').value.toLowerCase();
   const today=new Date(); today.setHours(0,0,0,0);
-  let list=[...clients];
+  // Start with visible clients for this user's role
+  let list=[...getVisibleClients()];
+  // Apply folder filter (owner/manager)
+  if (_folderFilter !== null) {
+    if (_folderFilter === '__shared__') {
+      list = list.filter(function(c){ return c.sharedWith && c.sharedWith.length > 0; });
+    } else {
+      list = list.filter(function(c){
+        return !c.ownedBy ? _folderFilter === _fbUserId
+             : c.ownedBy === _folderFilter;
+      });
+    }
+  }
   if(q) list=list.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.phone||'').includes(q)||(c.address||'').toLowerCase().includes(q));
   if(tempFlt) list=list.filter(c=>c.temp===tempFlt);
   if(typeFlt) list=list.filter(c=>c.type===typeFlt);
@@ -2072,6 +2171,32 @@ function renderClients(){
     return new Date(a.nextCall)-new Date(b.nextCall);
   });
   document.getElementById('clientCount').textContent=list.length;
+  // Show folder name banner
+  var folderBanner = document.getElementById('folderBanner');
+  if (!folderBanner) {
+    folderBanner = document.createElement('div');
+    folderBanner.id = 'folderBanner';
+    folderBanner.style.cssText = 'display:none;padding:6px 0 10px;font-size:12px;font-weight:700;color:#a855f7;display:flex;align-items:center;gap:6px';
+    var cc = document.getElementById('clientCards');
+    if (cc && cc.parentNode) cc.parentNode.insertBefore(folderBanner, cc);
+  }
+  if (_folderFilter && _folderFilter !== null) {
+    var folderName = '';
+    if (_folderFilter === '__shared__') {
+      folderName = '🔗 Compartidos';
+    } else if (_folderFilter === _fbUserId) {
+      folderName = '👑 Mis Clientes';
+    } else {
+      var fm = _teamMembers.find(function(m){ return m.uid === _folderFilter; });
+      var icons = {owner:'👑',manager:'🏆',supervisor:'⭐',agent:'👤'};
+      folderName = (icons[fm && fm.role] || '👤') + ' ' + ((fm && (fm.name || fm.email)) || _folderFilter);
+    }
+    folderBanner.style.display = 'flex';
+    folderBanner.innerHTML = '<span style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.25);border-radius:20px;padding:3px 12px">📁 ' + folderName + '</span>'
+      + '<button onclick="setFolder(null)" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:2px 6px">✕ Ver todos</button>';
+  } else {
+    if (folderBanner) folderBanner.style.display = 'none';
+  }
   if(!list.length){
     grid.innerHTML=`<div class="empty"><div class="empty-ico">👥</div><div>${lang==='es'?'No hay clientes. ¡Agrega uno!':'No clients found. Add one!'}</div></div>`;
     return;
@@ -2115,12 +2240,18 @@ function renderClients(){
 }
 
 function updateStats(){
-  const hot=clients.filter(c=>c.temp==='hot').length;
-  const warm=clients.filter(c=>c.temp==='warm').length;
-  const cold=clients.filter(c=>c.temp==='cold').length;
+  // Stats based on current folder view
+  var statList = _folderFilter !== null
+    ? (_folderFilter === '__shared__'
+        ? clients.filter(function(c){ return c.sharedWith && c.sharedWith.length > 0; })
+        : clients.filter(function(c){ return (!c.ownedBy ? _folderFilter === _fbUserId : c.ownedBy === _folderFilter); }))
+    : getVisibleClients();
+  const hot=statList.filter(c=>c.temp==='hot').length;
+  const warm=statList.filter(c=>c.temp==='warm').length;
+  const cold=statList.filter(c=>c.temp==='cold').length;
   const today=new Date();today.setHours(0,0,0,0);
-  const ov=clients.filter(c=>c.nextCall&&new Date(c.nextCall+'T00:00:00')<today).length;
-  const closed=clients.filter(c=>c.stage==='closed').length;
+  const ov=statList.filter(c=>c.nextCall&&new Date(c.nextCall+'T00:00:00')<today).length;
+  const closed=statList.filter(c=>c.stage==='closed').length;
   document.getElementById('sidebarStats').innerHTML=`
     <div class="stat-row"><span class="stat-label">${lang==='es'?'Caliente':'Hot'}</span><span class="stat-val hot">🔥 ${hot}</span></div>
     <div class="stat-row"><span class="stat-label">${lang==='es'?'Tibio':'Warm'}</span><span class="stat-val warm">🌡️ ${warm}</span></div>
@@ -2132,7 +2263,7 @@ function updateStats(){
 }
 
 function toggleTemp(t){ tempFlt=tempFlt===t?'':t; document.getElementById('fltHot').classList.toggle('on',tempFlt==='hot'); document.getElementById('fltCold').classList.toggle('on',tempFlt==='cold'); renderClients(); }
-function filterNav(type,el){ typeFlt=type; document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active')); el.classList.add('active'); renderClients(); }
+function filterNav(type,el){ typeFlt=type; document.querySelectorAll('.nav-item:not(.folder-item)').forEach(n=>n.classList.remove('active')); el.classList.add('active'); renderClients(); }
 
 // ════════════════════════════════════════
 //  PIPELINE
@@ -2702,6 +2833,7 @@ function closeShareModal() {
 
 // ── Owner view-as-agent mode ──
 var _viewingAgent = null; // { uid, name } when owner is viewing an agent's folder
+var _folderFilter = null; // null = show all (owner), or uid = show only that person's clients
 
 // ── Transfer client to another agent ──
 function openTransferClientModal(clientId) {
@@ -2775,28 +2907,14 @@ async function transferClient(clientId, toUid, toName) {
 }
 
 function viewAgentFolder(uid, name) {
-  _viewingAgent = { uid: uid, name: name };
-  // Show banner
-  var banner = document.getElementById('agentViewBanner');
-  if (!banner) {
-    banner = document.createElement('div');
-    banner.id = 'agentViewBanner';
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9998;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700';
-    document.body.style.paddingTop = '36px';
-    document.body.appendChild(banner);
-  }
-  banner.innerHTML = '👁 Viendo carpeta de: <strong>' + name + '</strong>'
-    + '<button onclick="exitAgentView()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:3px 12px;color:#fff;font-size:12px;cursor:pointer;font-family:inherit">✕ Salir</button>';
-  // Filter clients to only show this agent's
-  renderAll();
+  // Use the folder system instead of the old banner approach
   switchTab('clients');
+  setTimeout(function() { setFolder(uid); }, 100);
 }
 
 function exitAgentView() {
   _viewingAgent = null;
-  var banner = document.getElementById('agentViewBanner');
-  if (banner) { banner.remove(); document.body.style.paddingTop = ''; }
-  renderAll();
+  setFolder(null);
 }
 
 // Override getVisibleClients to respect _viewingAgent
