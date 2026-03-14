@@ -2719,6 +2719,24 @@ function exportPDF() {
 }
 
 // ── Import CSV ──
+function parseCSVLine(line) {
+  // Proper CSV parser — handles quoted fields with commas inside
+  var result = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (ch === '"') {
+      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (ch === ',' && !inQ) {
+      result.push(cur.trim()); cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
 function importCSV(event) {
   if(!canExport()){showToast('❌ Sin permiso');return;}
   var file = event.target.files[0];
@@ -2726,37 +2744,77 @@ function importCSV(event) {
   var reader = new FileReader();
   reader.onload = function(e) {
     try {
-      var lines = e.target.result.split('\n').filter(function(l){ return l.trim(); });
-      var imported = 0;
-      var typeMap = {'compra':'buy','venta':'sell','refinance':'refi','préstamo':'loan','prestamo':'loan','referido':'referral','buysell':'buysell'};
-      var tempMap = {'caliente':'hot','tibio':'warm','frío':'cold','frio':'cold','hot':'hot','warm':'warm','cold':'cold'};
+      var text  = e.target.result.replace(/\r/g, '');
+      var lines = text.split('\n').filter(function(l){ return l.trim(); });
+      if (lines.length < 2) { showToast('❌ CSV vacío o sin datos'); return; }
+
+      var typeMap = {
+        'compra':'buy','purchase':'buy','buy':'buy',
+        'venta':'sell','sell':'sell',
+        'refinance':'refi','refi':'refi',
+        'préstamo':'loan','prestamo':'loan','loan':'loan',
+        'referido':'referral','referral':'referral',
+        'venta/compra':'buysell','buysell':'buysell'
+      };
+      var tempMap = {
+        'caliente':'hot','hot':'hot',
+        'tibio':'warm','warm':'warm','tibia':'warm',
+        'frío':'cold','frio':'cold','cold':'cold'
+      };
+      var stageMap = {
+        'lead':'lead','contactado':'contacted','contacted':'contacted',
+        'calificado':'qualified','qualified':'qualified',
+        'negociación':'negotiation','negociacion':'negotiation','negotiation':'negotiation',
+        'bajo contrato':'contract','contract':'contract',
+        'cerrado':'closed','closed':'closed'
+      };
+
+      var imported = 0, skipped = 0, errors = 0;
       for (var i = 1; i < lines.length; i++) {
-        var cols = lines[i].split(',').map(function(c){ return c.replace(/^"|"$/g,'').trim(); });
-        if (!cols[0]) continue;
-        var c = {
-          id: Date.now() + i,
-          created: Date.now(),
-          name:      cols[0] || '',
-          phone:     cols[1] || '',
-          email:     cols[2] || '',
-          address:   cols[3] || '',
-          type:      typeMap[(cols[4]||'').toLowerCase()] || 'buy',
-          temp:      tempMap[(cols[5]||'').toLowerCase()] || 'warm',
-          stage:     'lead',
-          rate:      parseFloat(cols[7]) || 0,
-          amount:    parseFloat(cols[8]) || 0,
-          nextCall:  cols[9] || '',
-          closeDate: cols[10] || '',
-          notes:     cols[11] || ''
-        };
-        // Don't duplicate
-        if (!clients.find(function(x){ return x.phone === c.phone && x.name === c.name; })) {
+        try {
+          var cols = parseCSVLine(lines[i]);
+          if (!cols[0] && !cols[1]) continue;
+
+          // Clean phone — remove all non-numeric except +
+          var rawPhone = (cols[1] || '').replace(/[^\d+\-\s\(\)]/g, '').trim();
+
+          var c = {
+            id:        Date.now() + i + Math.random(),
+            created:   Date.now(),
+            name:      cols[0] || '',
+            phone:     rawPhone,
+            email:     cols[2] || '',
+            address:   cols[3] || '',
+            type:      typeMap[(cols[4]||'').toLowerCase().trim()] || 'buy',
+            temp:      tempMap[(cols[5]||'').toLowerCase().trim()] || 'warm',
+            stage:     stageMap[(cols[6]||'').toLowerCase().trim()] || 'lead',
+            rate:      parseFloat((cols[7]||'').replace(/[^\d.]/g,'')) || 0,
+            amount:    parseFloat((cols[8]||'').replace(/[^\d.]/g,'')) || 0,
+            nextCall:  cols[9]  || '',
+            closeDate: cols[10] || '',
+            notes:     cols[11] || ''
+          };
+
+          if (!c.name) { errors++; continue; }
+
+          // Skip duplicates (same name + phone)
+          var isDup = clients.find(function(x){
+            return x.name.toLowerCase() === c.name.toLowerCase() &&
+                   x.phone.replace(/\D/g,'') === c.phone.replace(/\D/g,'');
+          });
+          if (isDup) { skipped++; continue; }
+
           clients.push(c);
           imported++;
-        }
+        } catch(rowErr) { errors++; }
       }
+
       saveAll(); renderAll();
-      showToast('✅ '+imported+' clientes importados');
+      var msg = '✅ ' + imported + (lang==='es'?' clientes importados':' clients imported');
+      if (skipped) msg += ' · ' + skipped + (lang==='es'?' duplicados omitidos':' duplicates skipped');
+      if (errors)  msg += ' · ' + errors + (lang==='es'?' errores':' errors');
+      showToast(msg);
+
     } catch(err) {
       showToast('❌ Error al importar CSV: ' + err.message);
     }
