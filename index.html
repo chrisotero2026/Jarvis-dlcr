@@ -929,7 +929,7 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
   <aside class="sidebar">
     <!-- CARPETAS (owner/manager only) -->
     <div id="folderSection" style="display:none">
-      <div class="nav-label" style="margin-top:4px">📁 Carpetas</div>
+      <div class="nav-label" style="margin-top:4px" id="lbl-carpetas-wrap">📁 Carpetas</div>
       <div id="folderList"></div>
       <div style="border-top:1px solid var(--border);margin:6px 12px"></div>
     </div>
@@ -2029,11 +2029,12 @@ function setLang(l){
     bbl.innerHTML = greeting + '! 👊 Soy <strong>Jarvis 2.0</strong> 🤖<br><br>' + helpText;
   }
   jvBuildCmds();
+  try { renderFolders(); } catch(ex) {}
   const map={
     'lbl-clients':l==='es'?'Clientes':'Clients','lbl-commission':l==='es'?'Comisión':'Commission',
     'lbl-team':l==='es'?'Equipo':'Team','lbl-mort':l==='es'?'Calculadora de Préstamo':'Loan Calculator',
     'lbl-income':l==='es'?'Ingresos':'Income','lbl-table':l==='es'?'Tabla':'Table',
-    'lbl-filter':l==='es'?'Filtrar':'Filter','lbl-all':l==='es'?'Todos':'All',
+    'lbl-filter':l==='es'?'Filtrar':'Filter','lbl-all':l==='es'?'Todos':'All','lbl-carpetas-wrap':l==='es'?'📁 Carpetas':'📁 Folders',
     'lbl-buy':l==='es'?'Compra':'Purchase','lbl-sell':l==='es'?'Venta':'Sell',
     'lbl-buysell':l==='es'?'Venta/Compra':'Buy/Sell','lbl-loan':l==='es'?'Préstamo':'Loan',
     'lbl-hot':l==='es'?'Caliente':'Hot','lbl-cold':l==='es'?'Frío':'Cold',
@@ -2129,7 +2130,7 @@ function renderFolders() {
   if (!isOwnerOrMgr) { sec.style.display = 'none'; return; }
 
   var folders = [];
-  var myName  = (_fbUser && (_fbUser.displayName || _fbUser.email)) || 'Mis Clientes';
+  var myName  = (_fbUser && (_fbUser.displayName || _fbUser.email)) || (lang==='es'?'Mis Clientes':'My Clients');
   var myCount = clients.filter(function(c){ return !c.ownedBy || c.ownedBy === _fbUserId; }).length;
   folders.push({ uid: _fbUserId, name: myName, count: myCount, isMe: true });
 
@@ -2157,7 +2158,7 @@ function renderFolders() {
   var allDiv = document.createElement('div');
   allDiv.className = 'nav-item folder-item' + (_folderFilter === null ? ' active' : '');
   allDiv.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
-  allDiv.innerHTML = '<span><span class="nav-icon">🗂️</span> Todos</span>'
+  allDiv.innerHTML = '<span><span class="nav-icon">🗂️</span> '+(lang==='es'?'Todos':'All')+'</span>'
     + '<span style="font-size:10px;background:rgba(255,255,255,.1);padding:1px 6px;border-radius:20px">' + clients.length + '</span>';
   allDiv.addEventListener('click', function(){ setFolder(null); });
   list.appendChild(allDiv);
@@ -2165,7 +2166,7 @@ function renderFolders() {
   // Each person's folder
   folders.forEach(function(f) {
     var icon  = f.isMe ? (isOwner() ? '👑' : '🏆') : (roleIcon[f.role] || '👤');
-    var label = f.isMe ? 'Mis Clientes' : (f.name || f.uid);
+    var label = f.isMe ? (lang==='es'?'Mis Clientes':'My Clients') : (f.name || f.uid);
     var d = document.createElement('div');
     d.className = 'nav-item folder-item' + (_folderFilter === f.uid ? ' active' : '');
     d.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
@@ -2243,7 +2244,7 @@ function renderClients(){
     if (_folderFilter === '__shared__') {
       folderName = '🔗 Compartidos';
     } else if (_folderFilter === _fbUserId) {
-      folderName = '👑 Mis Clientes';
+      folderName = '👑 '+(lang==='es'?'Mis Clientes':'My Clients');
     } else {
       var fm = _teamMembers.find(function(m){ return m.uid === _folderFilter; });
       var icons = {owner:'👑',manager:'🏆',supervisor:'⭐',agent:'👤'};
@@ -5322,7 +5323,7 @@ function updateUserHeader() {
   if (_fbUser) {
     el.innerHTML = '<span style="font-size:11px;color:var(--gold);font-weight:700">👤 '
       + (_fbUser.displayName || _fbUser.email) + '</span>'
-      + '<button onclick="logOut()" style="margin-left:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Salir</button>';
+      + '<button onclick="logOut()" style="margin-left:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">'+(lang==='es'?'Salir':'Logout')+'</button>';
   } else {
     el.innerHTML = '';
   }
