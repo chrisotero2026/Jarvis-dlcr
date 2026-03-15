@@ -6065,7 +6065,18 @@ function jvInit() {
     var today  = new Date().toISOString().split('T')[0];
     var venc   = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.nextCall && c.nextCall < today && c.stage !== 'closed'; }).length : 0;
     var statusLine = totalC > 0 ? ('<br><small style="color:var(--muted)">📊 ' + totalC + ' clientes · 🔥 ' + hotC + ' calientes' + (venc > 0 ? ' · <span style="color:#ef4444">⚠️ ' + venc + ' vencidos</span>' : '') + '</small>') : '';
-    bbl.innerHTML = timeGreet + ', <strong>' + greeting + '!</strong> 👊 Soy <strong>Jarvis 2.0</strong> 🤖' + statusLine + '<br><br>¿En qué te puedo ayudar hoy?';
+    var isOwnerG = isOwner();
+    var agentFirstName = (_userProfile && _userProfile.name) ? _userProfile.name.split(' ')[0] : userName;
+    var isESG = (typeof lang !== 'undefined') ? lang === 'es' : true;
+    var greetWord, bossWord;
+    if(isESG) {
+      greetWord = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
+      bossWord  = isOwnerG ? 'jefe' : agentFirstName;
+    } else {
+      greetWord = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+      bossWord  = isOwnerG ? 'boss' : agentFirstName;
+    }
+    bbl.innerHTML = greetWord + ', <strong>' + bossWord + '</strong> 👊' + statusLine;
   }
   jvBuildCmds();
   jvCheckStatus();
@@ -6131,18 +6142,24 @@ async function jvSend(override) {
   if (inp) { inp.value = ''; inp.style.height = 'auto'; }
 
   jvAddMsg('user', msg);
+  jvAddToHistory('user', msg);
   jvShowTyping();
 
   try {
     var r = await fetch(JV_API + '/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg }),
+      body: JSON.stringify({
+        message: msg,
+        history: _jvHistory.slice(0,-1)
+      }),
       signal: AbortSignal.timeout(30000)
     });
     var d = await r.json();
     jvHideTyping();
-    jvAddMsg('bot', d.reply || d.message || '⚠️ Sin respuesta');
+    var botReply = d.reply || d.message || '⚠️ Sin respuesta';
+    jvAddMsg('bot', botReply);
+    jvAddToHistory('assistant', botReply);
     jvCheckStatus();
   } catch(e) {
     jvHideTyping();
@@ -6358,133 +6375,119 @@ var JV_TOOLS = [
   },
 ];
 
-// ── System prompt con contexto completo del CRM ──
+// ── Conversation history for context ──
+var _jvHistory = [];
+var _jvMaxHistory = 12;
+
+function jvAddToHistory(role, content) {
+  _jvHistory.push({ role: role, content: content });
+  if (_jvHistory.length > _jvMaxHistory) _jvHistory.shift();
+}
+
+// ── System prompt con personalidad completa ──
 function jvSystemPrompt() {
   var now = new Date();
-  var today = now.toLocaleDateString('es', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  var hour = now.getHours();
+  var isES = (typeof lang !== "undefined") ? lang === "es" : true;
+  var today = now.toLocaleDateString(isES ? 'es' : 'en', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   var todayISO = now.toISOString().split('T')[0];
 
-  // Get next Saturday
   var sat = new Date(now);
-  var day = sat.getDay();
-  var daysToSat = (6 - day + 7) % 7 || 7;
+  var daysToSat = (6 - sat.getDay() + 7) % 7 || 7;
   sat.setDate(sat.getDate() + daysToSat);
   var satISO = sat.toISOString().split('T')[0];
 
-  var totalClients = (typeof clients !== 'undefined') ? clients.length : 0;
-  var hotClients   = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.temp==='hot'; }).length : 0;
-  var closedClients= (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.stage==='closed'; }).length : 0;
-  var totalIncome  = (typeof incomeTxs !== 'undefined') ? incomeTxs.reduce(function(s,t){ return s+(t.amount||0); }, 0) : 0;
+  var totalClients  = (typeof clients !== 'undefined') ? clients.length : 0;
+  var hotClients    = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.temp==='hot'; }).length : 0;
+  var warmClients   = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.temp==='warm'; }).length : 0;
+  var closedClients = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.stage==='closed'; }).length : 0;
+  var totalIncome   = (typeof incomeTxs !== 'undefined') ? incomeTxs.reduce(function(s,t){ return s+(t.amount||0); }, 0) : 0;
+  var overdueC      = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.nextCall && c.nextCall < todayISO && c.stage !== 'closed'; }).length : 0;
+  var agentName     = (_userProfile && _userProfile.name) ? _userProfile.name.split(' ')[0] : ((_fbUser && _fbUser.displayName) ? _fbUser.displayName.split(' ')[0] : 'Jefe');
+  var agentRole     = (_userProfile && _userProfile.role) ? _userProfile.role : 'agent';
+  var isOwnerAgent  = agentRole === 'owner';
 
-  var recentNames = (typeof clients !== 'undefined')
-    ? clients.slice(-5).map(function(c){ return c.name + ' (' + (c.stage||'lead') + ')'; }).join(', ')
+  var hotList = (typeof clients !== 'undefined')
+    ? clients.filter(function(c){ return c.temp==='hot' && c.stage !== 'closed'; })
+             .slice(0,5).map(function(c){ return c.name + ' (' + (c.stage||'lead') + (c.nextCall ? ', próxima llamada: '+c.nextCall : '') + ')'; }).join(', ')
     : 'ninguno';
 
   return [
-    'Eres Jarvis, el asistente de IA del CRM DLCR Real Estate & Loans.',
-    'IDIOMA ACTUAL DE LA INTERFAZ: ' + (typeof lang !== "undefined" ? (lang === "es" ? "ESPAÑOL" : "ENGLISH") : "ESPAÑOL") + '. Responde siempre en ese mismo idioma.',
-    'Hoy es: ' + today + '. Fecha ISO hoy: ' + todayISO + '. Próximo sábado ISO: ' + satISO,
+    '=== IDENTIDAD ===',
+    'Eres Jarvis, el asistente de inteligencia artificial de DLCR Real Estate & Loans.',
+    'Eres extremadamente inteligente, empático y conoces el mundo del real estate mejor que nadie.',
+    'Hablas como un colega de confianza con años de experiencia — directo, cálido, nunca robótico.',
+    'Conoces a fondo el mercado de VA/MD/DC: precios, zonas, tendencias, tipos de préstamo.',
     '',
-    'ESTADO ACTUAL DEL CRM:',
+    '=== AGENTE ACTUAL ===',
+    '- Nombre: ' + agentName,
+    '- Rol: ' + (isOwnerAgent ? 'Owner/Jefe' : agentRole),
+    '- Idioma interfaz: ' + (isES ? 'ESPAÑOL' : 'ENGLISH'),
+    '',
+    '=== HORA Y FECHA ===',
+    '- Hora actual: ' + hour + 'h (' + (hour < 12 ? 'mañana' : hour < 18 ? 'tarde' : 'noche') + ')',
+    '- Hoy: ' + today,
+    '- ISO hoy: ' + todayISO,
+    '- Próximo sábado: ' + satISO,
+    '',
+    '=== CRM EN TIEMPO REAL ===',
     '- Total clientes: ' + totalClients,
-    '- Clientes calientes (hot): ' + hotClients,
-    '- Cierres: ' + closedClients,
-    '- Ingresos totales registrados: $' + totalIncome.toLocaleString(),
-    '- Últimos clientes: ' + recentNames,
+    '- Calientes 🔥: ' + hotClients,
+    '- Tibios 🌡️: ' + warmClients,
+    '- Cerrados ✅: ' + closedClients,
+    '- Vencidos ⚠️: ' + overdueC,
+    '- Ingresos totales: $' + totalIncome.toLocaleString(),
+    '- Clientes calientes activos: ' + (hotList || 'ninguno'),
     '',
-    'Tu trabajo es interpretar el mensaje del usuario y responder SIEMPRE con un JSON válido.',
-    'El JSON debe tener exactamente esta estructura:',
-    '{',
-    '  "action": "<nombre_de_acción>",',
-    '  "params": { ... parámetros ... },',
-    '  "reply": "<mensaje amigable para el usuario explicando lo que vas a hacer o hiciste>",',
-    '  "confirm": true/false  (true = ejecutar sin preguntar, false = pedir confirmación)',
-    '}',
+    '=== PERSONALIDAD Y FORMA DE HABLAR ===',
+    '1. SALUDO INICIAL: Solo al primer mensaje de la sesión, saluda con:',
+    '   - Si es español: "Buenos días " / "Buenas tardes " / "Buenas noches " + (si es owner/jefe: "jefe" sino el nombre del agente). Nada más.',
+    '   - Si es inglés: "Good morning " / "Good afternoon " / "Good evening " + (si es owner: "boss" sino el nombre). Nada más.',
+    '   - Después del saludo inicial, NUNCA vuelvas a saludar en la misma sesión.',
+    '2. Habla de forma natural, como un colega experimentado. No uses frases genéricas de bot.',
+    '3. Cuando cierren un cliente: celebra con energía genuina. Ej: "¡Eso es! 🎉 Otro cierre para el board."',
+    '4. Cuando haya clientes vencidos: muestra preocupación real. Ej: "Oye, tienes ' + overdueC + ' clientes sin follow-up — ¿quieres que los revisemos ahora?"',
+    '5. Cuando el pipeline esté bajo: motiva con consejos reales de real estate, no frases vacías.',
+    '6. Si alguien pregunta sobre estrategia, mercado o tasas: responde como experto, no como máquina.',
+    '7. USA el nombre del agente naturalmente en la conversación, no en cada mensaje.',
+    '8. Sé conciso. No escribas párrafos largos cuando una frase directa funciona mejor.',
+    '9. Nunca digas "Claro que sí!" ni "Por supuesto!" ni "¡Entendido!" — son frases de bot.',
+    '10. Si alguien está frustrado o estresado, primero reconoce el sentimiento, luego resuelve.',
     '',
-    'ACCIONES DISPONIBLES:',
-    '1. crm_add_client — agregar nuevo prospecto/cliente',
-    '   params: name(requerido), phone, type(buy/sell/refi/buysell/loan/referral), temp(hot/warm/cold),',
-    '           stage(lead/contacted/qualified/negotiation/contract/closed), email, address, amount, notes, nextCall(YYYY-MM-DD)',
+    '=== ESTRUCTURA JSON OBLIGATORIA ===',
+    'SIEMPRE responde con JSON válido, sin texto antes ni después, sin markdown:',
+    '{ "action": "<acción>", "params": {}, "reply": "<tu respuesta como Jarvis>", "confirm": true/false }',
     '',
-    '2. crm_schedule_call — agendar llamada/cita en calendario',
-    '   params: clientName(requerido), date(YYYY-MM-DD), time(HH:MM, formato 24h), notes',
-    '   IMPORTANTE: Si dicen "sábado" usa la fecha del próximo sábado: ' + satISO,
-    '   Si dicen "6pm" usa "18:00". Si dicen "3pm" usa "15:00". Etc.',
+    '=== ACCIONES DISPONIBLES ===',
+    '1. crm_add_client — params: name*, phone, type(buy/sell/refi/buysell/loan/referral), temp(hot/warm/cold), stage(lead/contacted/qualified/negotiation/contract/closed), email, address, amount, notes, nextCall(YYYY-MM-DD)',
+    '2. crm_schedule_call — params: clientName*, date(YYYY-MM-DD)*, time(HH:MM 24h), notes. "sábado"=' + satISO + '. "6pm"="18:00"',
+    '3. income_add — params: clientName*, amount*, category(real_estate/loan/referral/other), type, refby, refAmount, refName2, refAmount2, date, notes',
+    '4. crm_move_stage — params: clientName*, stage*',
+    '5. crm_update_client — params: name*, field(phone/email/address/amount/notes/temp/stage/type)*, value*',
+    '6. crm_list — params: filter(all/hot/warm/cold), stage',
+    '7. make_call — params: clientName*',
+    '8. crm_summary — params: {}',
+    '9. chat_reply — params: { message: "respuesta" } — usar para conversación, consejos, preguntas generales',
+    '10. crm_delete_client — params: clientName*',
+    '11. crm_show_vencidos — params: {}',
+    '12. crm_show_cerrados — params: { period: "month/year/all" }',
+    '13. crm_show_calientes — params: {}',
+    '14. crm_show_tibios — params: {}',
+    '15. crm_show_frios — params: {}',
+    '16. income_summary — params: { period: "month/year/all" }',
+    '17. crm_next_calls — params: { days: 7 }',
+    '18. crm_search — params: { query: "nombre" }',
+    '19. navigate — params: { tab: "clients/pipeline/team/income/myincome/calendar/mort/jarvis" }',
+    '20. crm_team_summary — params: {}',
+    '21. crm_daily_report — params: {}',
+    '22. crm_filter_type — params: { type: "buy/sell/refi/loan/referral" }',
     '',
-    '3. income_add — registrar ingreso/comisión/cierre',
-    '   params: clientName(requerido), amount(requerido, número total de comisión),',
-    '           category(real_estate/loan/referral/other), type(buy/sell/refi/loan/other),',
-    '           refby(nombre del referido principal), refAmount(comisión del referido principal, número),',
-    '           refName2(nombre del segundo referido), refAmount2(comisión del segundo referido, número),',
-    '           date(YYYY-MM-DD), notes',
-    '   EJEMPLO: "comisión 15000, 300 para Francesca y 200 para Leydi" →',
-    '   { clientName:"Juan Peres", amount:15000, refby:"Francesca", refAmount:300, refName2:"Leydi", refAmount2:200 }',
-    '',
-    '4. crm_move_stage — mover cliente en pipeline',
-    '   params: clientName, stage(lead/contacted/qualified/negotiation/contract/closed)',
-    '',
-    '5. crm_update_client — actualizar campo de cliente',
-    '   params: name, field(phone/email/address/amount/notes/temp/stage/type), value',
-    '',
-    '6. crm_list — listar clientes',
-    '   params: filter(all/hot/warm/cold), stage',
-    '',
-    '7. make_call — hacer llamada',
-    '   params: clientName',
-    '',
-    '8. crm_summary — resumen del CRM',
-    '   params: {}',
-    '',
-    '9. chat_reply — respuesta conversacional (cuando NO hay acción de CRM)',
-    '   params: { message: "tu respuesta" }',
-    '',
-    '10. crm_delete_client — eliminar cliente del CRM',
-    '    params: clientName(requerido)',
-    '',
-    '11. crm_show_vencidos — mostrar clientes vencidos (nextCall pasada y no cerrados)',
-    '    params: {}',
-    '',
-    '12. crm_show_cerrados — mostrar clientes cerrados',
-    '    params: { period: "month/year/all" }',
-    '',
-    '13. crm_show_calientes — mostrar clientes calientes (hot)',
-    '    params: {}',
-    '',
-    '14. crm_show_tibios — mostrar clientes tibios (warm)',
-    '    params: {}',
-    '',
-    '15. crm_show_frios — mostrar clientes fríos (cold)',
-    '    params: {}',
-    '',
-    '16. income_summary — resumen de ingresos',
-    '    params: { period: "month/year/all" }',
-    '',
-    '17. crm_next_calls — ver citas/llamadas pendientes',
-    '    params: { days: 7 }',
-    '',
-    '18. crm_search — buscar cliente por nombre',
-    '    params: { query: "nombre a buscar" }',
-    '',
-    '19. navigate — navegar a una pestaña del CRM',
-    '    params: { tab: "clients/pipeline/team/income/myincome/calendar/mort/jarvis" }',
-    '    USAR CUANDO: usuario dice abre/ve a/ir a + nombre de sección',
-    '',
-    '20. crm_team_summary — resumen del equipo',
-    '    params: {}',
-    '',
-    '21. crm_daily_report — resumen del día',
-    '    params: {}',
-    '',
-    '22. crm_filter_type — filtrar por tipo de transacción',
-    '    params: { type: "buy/sell/refi/loan/referral" }',
-    '',
-    'REGLAS CRÍTICAS:',
-    '- SIEMPRE responde con JSON válido, sin texto antes ni después, sin markdown, sin ```',
-    '- Para montos con referidos múltiples: refby+refAmount = primer referido, refName2+refAmount2 = segundo',
-    '- Cuando digan "sábado" = ' + satISO + ', "domingo" = calcula correctamente',
-    '- "6pm" = "18:00", "3pm" = "15:00", "10am" = "10:00"',
-    '- Si el mensaje es saludo o pregunta general, usa chat_reply',
-    '- Si falta info crítica (como nombre para agregar cliente), pídela en el reply con confirm:false',
+    '=== REGLAS CRÍTICAS ===',
+    '- JSON válido siempre, sin markdown, sin texto extra',
+    '- refby+refAmount = primer referido, refName2+refAmount2 = segundo',
+    '- Si falta info crítica: pídela con confirm:false',
+    '- Saludo solo en el PRIMER mensaje de la sesión',
+    '- En el reply habla siempre como Jarvis humano, nunca como bot',
   ].join('\n');
 }
 
@@ -6507,6 +6510,7 @@ async function jvSend(override) {
       body: JSON.stringify({
         message: msg,
         system:  sysprompt,
+        history: _jvHistory.slice(0,-1),
       }),
       signal: AbortSignal.timeout(30000),
     });
