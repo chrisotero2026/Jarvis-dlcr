@@ -7249,7 +7249,7 @@ var _origSetLang = typeof setLang === 'function' ? setLang : null;
   <div class="tc-me-row">
     <div class="tc-me-av" id="tc-my-avatar" style="background:linear-gradient(135deg,var(--gold),var(--gold2))">?</div>
     <div class="tc-me-name" id="tc-my-name">Cargando...</div>
-    <select class="tc-status-sel" id="tc-status-sel" onchange="tcChangeMyStatus(this.value)">
+    <select class="tc-status-sel" id="tc-status-sel" onchange="if(typeof tcChangeMyStatus==='function')tcChangeMyStatus(this.value)">
       <option value="online">🟢</option>
       <option value="busy">🟡</option>
       <option value="offline">🔴</option>
@@ -7439,7 +7439,7 @@ function tcRenderAgentsList() {
     var initials = tcInitials(ag.name);
     var unread = _tcUnreadCounts[ag.uid]||0;
     var isActive = _tcCurrentChat === ag.uid ? ' active' : '';
-    html += '<div class="tc-panel-agent'+isActive+'" onclick="tcOpenChat(''+ag.uid+'',this)">';
+    html += '<div class="tc-panel-agent'+isActive+'" onclick="tcOpenChat(\'' + ag.uid + '\',this)">';
     html += '<div class="tc-av" style="background:linear-gradient(135deg,'+color+','+color+'aa)">'+initials;
     html += '<span class="tc-dot '+tcStatusClass(ag.status)+'"></span></div>';
     html += '<div class="tc-ag-info"><div class="tc-ag-name">'+escHtml(ag.name)+'</div>';
@@ -7453,7 +7453,7 @@ function tcRenderAgentsList() {
 function tcOpenChat(uid, el) {
   _tcCurrentChat = uid;
   // Mark active
-  document.querySelectorAll('.tc-agent-item').forEach(function(x){ x.classList.remove('active'); });
+  document.querySelectorAll('.tc-panel-agent').forEach(function(x){ x.classList.remove('active'); });
   if(el) el.classList.add('active');
   // Clear unread
   _tcUnreadCounts[uid] = 0;
