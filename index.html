@@ -106,7 +106,7 @@ header { position:relative; }
 .tab.active{color:var(--gold);border-bottom-color:var(--gold);}
 
 /* LAYOUT */
-.app{display:flex;height:calc(100vh - 106px);}
+.app{display:flex;height:calc(100vh - 106px);margin-right:280px;transition:margin-right .25s;}
 .sidebar{width:200px;background:var(--navy2);border-right:1px solid var(--border);padding:12px 0;flex-shrink:0;overflow-y:auto;}
 .nav-section{padding:6px 14px;margin-bottom:2px;}
 .nav-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;}
@@ -891,7 +891,7 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
 <div class="tabs">
   <div class="tab active" id="tab-clients" onclick="switchTab('clients')">👥 <span id="lbl-clients">Clientes</span></div>
   <div class="tab" id="tab-pipeline" onclick="switchTab('pipeline')">📊 Pipeline</div>
-  <div class="tab" id="tab-teamchat" onclick="switchTab('teamchat')">💬 Team Chat<span id="teamchat-badge" style="display:none;background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:5px">0</span></div>
+
   <div class="tab" id="tab-team" onclick="switchTab('team')">👥 <span id="lbl-team">Equipo</span></div>
   <div class="tab" id="tab-income" onclick="switchTab('income')">📈 <span id="lbl-income">Ingresos</span></div>
   <div class="tab" id="tab-table" onclick="switchTab('table')">📋 <span id="lbl-table">Tabla</span></div>
@@ -7144,101 +7144,143 @@ var _origSetLang = typeof setLang === 'function' ? setLang : null;
     </div>
   </div>
 </div>
-<!-- ═══ VIEW: TEAM CHAT ═══ -->
-<div class="view" id="view-teamchat">
-  <style>
-    /* ── Team Chat Styles ── */
-    .tc-wrap{display:flex;height:100%;overflow:hidden;}
-    .tc-sidebar{width:260px;flex-shrink:0;background:var(--navy2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-    .tc-sidebar-hdr{padding:14px 16px;border-bottom:1px solid var(--border);}
-    .tc-sidebar-title{font-family:'Syne',sans-serif;font-weight:800;font-size:15px;margin-bottom:10px;}
-    .tc-my-status{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:2px;}
-    .tc-my-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#000;flex-shrink:0;}
-    .tc-my-name{font-weight:700;font-size:13px;}
-    .tc-my-email{font-size:11px;color:var(--muted);}
-    .tc-status-sel{background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;outline:none;width:100%;margin-top:6px;}
-    .tc-agents-list{flex:1;overflow-y:auto;padding:8px;}
-    .tc-agent-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:all .15s;margin-bottom:4px;border:1px solid transparent;}
-    .tc-agent-item:hover{background:var(--card);border-color:var(--border);}
-    .tc-agent-item.active{background:linear-gradient(135deg,rgba(240,165,0,.12),rgba(240,165,0,.04));border-color:rgba(240,165,0,.25);}
-    .tc-agent-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;position:relative;}
-    .tc-presence-dot{position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;border:2px solid var(--navy2);}
-    .tc-presence-dot.online{background:#22c55e;box-shadow:0 0 5px #22c55e;}
-    .tc-presence-dot.busy{background:#f59e0b;box-shadow:0 0 5px #f59e0b;}
-    .tc-presence-dot.offline{background:var(--red);}
-    .tc-agent-info{flex:1;min-width:0;}
-    .tc-agent-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .tc-agent-status{font-size:11px;color:var(--muted);}
-    .tc-unread-badge{background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;flex-shrink:0;}
-    .tc-main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-    .tc-chat-hdr{padding:12px 18px;border-bottom:1px solid var(--border);background:var(--navy2);display:flex;align-items:center;gap:12px;flex-shrink:0;}
-    .tc-chat-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;position:relative;}
-    .tc-chat-name{font-family:'Syne',sans-serif;font-weight:800;font-size:16px;}
-    .tc-chat-substatus{font-size:12px;color:var(--muted);}
-    .tc-messages{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:10px;}
-    .tc-msg{display:flex;gap:10px;align-items:flex-end;}
-    .tc-msg.mine{flex-direction:row-reverse;}
-    .tc-msg-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
-    .tc-msg-bbl{max-width:68%;background:var(--card);border:1px solid var(--border);border-radius:14px 14px 14px 4px;padding:9px 13px;font-size:13.5px;line-height:1.6;}
-    .tc-msg.mine .tc-msg-bbl{background:rgba(45,108,223,.18);border-color:rgba(45,108,223,.3);border-radius:14px 14px 4px 14px;}
-    .tc-msg-meta{font-size:10px;color:var(--muted);margin-top:3px;}
-    .tc-msg-date-sep{text-align:center;font-size:11px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border);margin:6px 0;}
-    .tc-input-row{padding:12px 16px;background:var(--navy2);border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;}
-    .tc-input{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:none;min-height:42px;max-height:110px;transition:border-color .15s;}
-    .tc-input:focus{border-color:var(--gold);}
-    .tc-send-btn{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,var(--gold),#d4920a);border:none;cursor:pointer;font-size:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:opacity .15s;}
-    .tc-send-btn:hover{opacity:.85;}
-    .tc-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--muted);}
-    .tc-empty-icon{font-size:48px;opacity:.4;}
-    .tc-empty-txt{font-size:14px;}
-    .tc-typing{font-size:12px;color:var(--muted);padding:4px 18px;min-height:22px;flex-shrink:0;}
-    .tc-section-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:8px 10px 4px 10px;}
-  </style>
-  <div class="tc-wrap">
-    <!-- LEFT: Agents List -->
-    <div class="tc-sidebar">
-      <div class="tc-sidebar-hdr">
-        <div class="tc-sidebar-title">💬 Team Chat</div>
-        <div class="tc-my-status" id="tc-my-status">
-          <div class="tc-my-avatar" id="tc-my-avatar">?</div>
-          <div style="flex:1;min-width:0">
-            <div class="tc-my-name" id="tc-my-name">Cargando...</div>
-            <div class="tc-my-email" id="tc-my-email"></div>
-            <select class="tc-status-sel" id="tc-status-sel" onchange="tcChangeMyStatus(this.value)">
-              <option value="online">🟢 Online</option>
-              <option value="busy">🟡 Ocupado</option>
-              <option value="offline">🔴 Offline</option>
-            </select>
-          </div>
+<!-- ═══ TEAM CHAT — PANEL LATERAL FIJO DERECHO ═══ -->
+<style>
+  /* Panel fijo lateral derecho */
+  #tc-panel{
+    position:fixed;top:62px;right:0;bottom:0;
+    width:280px;
+    background:var(--navy2);
+    border-left:1px solid var(--border);
+    display:flex;flex-direction:column;
+    z-index:150;
+    transition:transform .25s;
+  }
+  #tc-panel.tc-collapsed{transform:translateX(256px);}
+  #tc-panel.tc-collapsed .app{margin-right:24px;}
+
+  /* Toggle button */
+  .tc-toggle-btn{
+    position:absolute;left:-28px;top:50%;transform:translateY(-50%);
+    width:28px;height:56px;
+    background:var(--navy2);
+    border:1px solid var(--border);border-right:none;
+    border-radius:8px 0 0 8px;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:14px;
+    color:var(--muted);
+  }
+  .tc-toggle-btn:hover{color:var(--gold);}
+
+  /* Header del panel */
+  .tc-panel-hdr{
+    padding:10px 12px;
+    border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:8px;
+    flex-shrink:0;
+  }
+  .tc-panel-title{font-family:'Syne',sans-serif;font-weight:800;font-size:13px;flex:1;}
+
+  /* Mi estado compacto */
+  .tc-me-row{
+    display:flex;align-items:center;gap:8px;
+    padding:8px 12px;border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .tc-me-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#000;flex-shrink:0;}
+  .tc-me-name{font-size:12px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tc-status-sel{background:transparent;border:none;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;outline:none;padding:0;}
+
+  /* Lista agentes — panel izquierdo colapsable */
+  .tc-panel-agents{
+    width:100%;overflow-y:auto;
+    flex-shrink:0;
+    max-height:45%;
+    border-bottom:1px solid var(--border);
+  }
+  .tc-panel-agent{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;transition:all .15s;border-bottom:1px solid rgba(255,255,255,.03);}
+  .tc-panel-agent:hover{background:var(--card);}
+  .tc-panel-agent.active{background:rgba(240,165,0,.1);border-left:2px solid var(--gold);}
+  .tc-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;position:relative;}
+  .tc-dot{position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--navy2);}
+  .tc-dot.online{background:#22c55e;box-shadow:0 0 4px #22c55e;}
+  .tc-dot.busy{background:#f59e0b;box-shadow:0 0 4px #f59e0b;}
+  .tc-dot.offline{background:#ef4444;}
+  .tc-ag-info{flex:1;min-width:0;}
+  .tc-ag-name{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tc-ag-st{font-size:10px;color:var(--muted);}
+  .tc-unread{background:var(--red);color:#fff;border-radius:8px;padding:1px 5px;font-size:10px;font-weight:700;}
+
+  /* Ventana de chat — parte inferior del panel */
+  .tc-chat-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;}
+  .tc-chat-hdr2{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0;background:var(--card);}
+  .tc-msgs{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;}
+  .tc-msg{display:flex;gap:6px;align-items:flex-end;}
+  .tc-msg.mine{flex-direction:row-reverse;}
+  .tc-msg-av2{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
+  .tc-bbl{max-width:80%;background:var(--card);border:1px solid var(--border);border-radius:12px 12px 12px 3px;padding:6px 10px;font-size:12px;line-height:1.5;word-break:break-word;}
+  .tc-msg.mine .tc-bbl{background:rgba(45,108,223,.2);border-color:rgba(45,108,223,.3);border-radius:12px 12px 3px 12px;}
+  .tc-meta{font-size:9px;color:var(--muted);margin-top:2px;text-align:right;}
+  .tc-typing2{font-size:10px;color:var(--muted);padding:3px 12px;min-height:18px;flex-shrink:0;}
+  .tc-inp-row{padding:8px 10px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:flex-end;flex-shrink:0;}
+  .tc-inp{flex:1;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;outline:none;resize:none;min-height:34px;max-height:80px;transition:border-color .15s;}
+  .tc-inp:focus{border-color:var(--gold);}
+  .tc-send2{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,var(--gold),#d4920a);border:none;cursor:pointer;font-size:13px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .tc-send2:hover{opacity:.85;}
+  .tc-no-chat{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center;padding:20px;}
+  .tc-sec-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:6px 12px 2px;}
+  .tc-date-sep{text-align:center;font-size:10px;color:var(--muted);padding:4px;border-bottom:1px solid var(--border);margin:4px 0;}
+</style>
+
+<div id="tc-panel">
+  <!-- Toggle button -->
+  <div class="tc-toggle-btn" onclick="tcTogglePanel()" title="Toggle Chat">
+    <span id="tc-toggle-icon">◀</span>
+    <span id="teamchat-badge" style="display:none;position:absolute;top:6px;left:4px;background:var(--red);color:#fff;border-radius:8px;padding:1px 4px;font-size:9px;font-weight:700">0</span>
+  </div>
+
+  <!-- Header -->
+  <div class="tc-panel-hdr">
+    <span style="font-size:14px">💬</span>
+    <div class="tc-panel-title">Team Chat</div>
+  </div>
+
+  <!-- Mi estado -->
+  <div class="tc-me-row">
+    <div class="tc-me-av" id="tc-my-avatar" style="background:linear-gradient(135deg,var(--gold),var(--gold2))">?</div>
+    <div class="tc-me-name" id="tc-my-name">Cargando...</div>
+    <select class="tc-status-sel" id="tc-status-sel" onchange="tcChangeMyStatus(this.value)">
+      <option value="online">🟢</option>
+      <option value="busy">🟡</option>
+      <option value="offline">🔴</option>
+    </select>
+  </div>
+
+  <!-- Lista de agentes -->
+  <div class="tc-panel-agents" id="tc-agents-list">
+    <div class="tc-sec-lbl">Equipo</div>
+    <div style="padding:12px;text-align:center;color:var(--muted);font-size:12px">Cargando...</div>
+  </div>
+
+  <!-- Área de chat -->
+  <div class="tc-chat-area">
+    <div class="tc-no-chat" id="tc-empty-state">Selecciona un agente</div>
+    <div id="tc-chat-window" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
+      <div class="tc-chat-hdr2">
+        <div class="tc-av" id="tc-chat-avatar" style="width:26px;height:26px;font-size:11px">?</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="tc-chat-name">-</div>
+          <div style="font-size:10px;color:var(--muted)" id="tc-chat-substatus">-</div>
         </div>
+        <div onclick="tcCloseChat()" style="cursor:pointer;color:var(--muted);font-size:14px;padding:2px 4px">✕</div>
       </div>
-      <div class="tc-section-lbl" id="tc-lbl-online">🟢 ONLINE</div>
-      <div class="tc-agents-list" id="tc-agents-list">
-        <div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">Cargando equipo...</div>
-      </div>
-    </div>
-    <!-- RIGHT: Chat Window -->
-    <div class="tc-main" id="tc-main">
-      <div class="tc-empty" id="tc-empty-state">
-        <div class="tc-empty-icon">💬</div>
-        <div class="tc-empty-txt">Selecciona un agente para chatear</div>
-      </div>
-      <div id="tc-chat-window" style="display:none;flex:1;display:none;flex-direction:column;overflow:hidden;">
-        <div class="tc-chat-hdr">
-          <div class="tc-chat-avatar" id="tc-chat-avatar">?</div>
-          <div>
-            <div class="tc-chat-name" id="tc-chat-name">-</div>
-            <div class="tc-chat-substatus" id="tc-chat-substatus">-</div>
-          </div>
-        </div>
-        <div class="tc-messages" id="tc-messages"></div>
-        <div class="tc-typing" id="tc-typing"></div>
-        <div class="tc-input-row">
-          <textarea class="tc-input" id="tc-input" placeholder="Escribe un mensaje..." rows="1"
-            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();tcSendMessage();}"
-            oninput="tcAutoResize(this);tcSendTyping()"></textarea>
-          <button class="tc-send-btn" onclick="tcSendMessage()">➤</button>
-        </div>
+      <div class="tc-msgs" id="tc-messages"></div>
+      <div class="tc-typing2" id="tc-typing"></div>
+      <div class="tc-inp-row">
+        <textarea class="tc-inp" id="tc-input" placeholder="Mensaje..." rows="1"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();tcSendMessage();}"
+          oninput="tcAutoResize2(this);tcSendTyping()"></textarea>
+        <button class="tc-send2" onclick="tcSendMessage()">➤</button>
       </div>
     </div>
   </div>
@@ -7385,38 +7427,28 @@ function tcListenPresence() {
 function tcRenderAgentsList() {
   var list = document.getElementById('tc-agents-list');
   var agents = Object.values(_tcAgentsData);
-  // Sort: online first, then busy, then offline
   var order = {online:0,busy:1,offline:2};
   agents.sort(function(a,b){ return (order[a.status]||2)-(order[b.status]||2) || (a.name||'').localeCompare(b.name||''); });
-
   if(!agents.length) {
-    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">No hay otros agentes conectados</div>';
+    list.innerHTML = '<div class="tc-sec-lbl">Equipo</div><div style="padding:12px;text-align:center;color:var(--muted);font-size:12px">Sin agentes</div>';
     return;
   }
-
-  var html = '';
-  var lastStatus = null;
+  var html = '<div class="tc-sec-lbl">Equipo ('+agents.length+')</div>';
   agents.forEach(function(ag) {
-    var statusGroup = ag.status==='online'?'🟢 ONLINE':ag.status==='busy'?'🟡 OCUPADO':'🔴 OFFLINE';
-    if(statusGroup !== lastStatus) {
-      html += '<div class="tc-section-lbl">'+statusGroup+'</div>';
-      lastStatus = statusGroup;
-    }
     var color = tcColor(ag.uid);
     var initials = tcInitials(ag.name);
     var unread = _tcUnreadCounts[ag.uid]||0;
     var isActive = _tcCurrentChat === ag.uid ? ' active' : '';
-    html += '<div class="tc-agent-item'+isActive+'" onclick="tcOpenChat(\''+ag.uid+'\',this)">';
-    html += '<div class="tc-agent-avatar" style="background:linear-gradient(135deg,'+color+','+color+'aa)">'+initials;
-    html += '<span class="tc-presence-dot '+tcStatusClass(ag.status)+'"></span></div>';
-    html += '<div class="tc-agent-info"><div class="tc-agent-name">'+escHtml(ag.name)+'</div>';
-    html += '<div class="tc-agent-status">'+tcStatusLabel(ag.status)+(ag.role?(' · '+(ag.role)):'')+'</div></div>';
-    if(unread>0) html += '<div class="tc-unread-badge">'+unread+'</div>';
+    html += '<div class="tc-panel-agent'+isActive+'" onclick="tcOpenChat(''+ag.uid+'',this)">';
+    html += '<div class="tc-av" style="background:linear-gradient(135deg,'+color+','+color+'aa)">'+initials;
+    html += '<span class="tc-dot '+tcStatusClass(ag.status)+'"></span></div>';
+    html += '<div class="tc-ag-info"><div class="tc-ag-name">'+escHtml(ag.name)+'</div>';
+    html += '<div class="tc-ag-st">'+tcStatusLabel(ag.status)+'</div></div>';
+    if(unread>0) html += '<div class="tc-unread">'+unread+'</div>';
     html += '</div>';
   });
   list.innerHTML = html;
 }
-
 // ── Open chat with agent ──
 function tcOpenChat(uid, el) {
   _tcCurrentChat = uid;
@@ -7445,6 +7477,12 @@ function tcOpenChat(uid, el) {
   var cw = document.getElementById('tc-chat-window');
   cw.style.display = 'flex';
   cw.style.flexDirection = 'column';
+  cw.style.flex = '1';
+  cw.style.overflow = 'hidden';
+  cw.style.minHeight = '0';
+
+  // Make sure panel is open
+  if(!_tcPanelOpen) tcTogglePanel();
 
   // Unsub previous
   if(_tcUnsubMessages) { try{_tcUnsubMessages();}catch(e){} }
@@ -7492,29 +7530,29 @@ function tcListenMessages(uid) {
 function tcRenderMessages(msgs) {
   var container = document.getElementById('tc-messages');
   if(!msgs.length) {
-    container.innerHTML = '<div class="tc-empty" style="flex:1"><div class="tc-empty-icon">👋</div><div class="tc-empty-txt">Di hola para empezar</div></div>';
+    container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px">👋 Di hola para empezar</div>';
     return;
   }
   var html = '';
   var lastDate = null;
   msgs.forEach(function(m) {
     var d = new Date(m.ts||0);
-    var dateStr = d.toLocaleDateString('es',{weekday:'long',day:'numeric',month:'long'});
+    var dateStr = d.toLocaleDateString('es',{day:'numeric',month:'short'});
     if(dateStr !== lastDate) {
-      html += '<div class="tc-msg-date-sep">'+dateStr+'</div>';
+      html += '<div class="tc-date-sep">'+dateStr+'</div>';
       lastDate = dateStr;
     }
     var isMine = m.from === _fbUser.uid;
     var color = tcColor(m.from||'x');
     var initials = tcInitials(m.name||'?');
     html += '<div class="tc-msg'+(isMine?' mine':'')+'">';
-    if(!isMine) html += '<div class="tc-msg-av" style="background:linear-gradient(135deg,'+color+','+color+'aa)">'+initials+'</div>';
-    html += '<div>';
-    if(!isMine) html += '<div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+escHtml(m.name||'')+' · '+tcTimeStr(m.ts)+'</div>';
-    html += '<div class="tc-msg-bbl">'+escHtml(m.text||'')+'</div>';
-    if(isMine) html += '<div class="tc-msg-meta">'+tcTimeStr(m.ts)+(m.read?' ✓✓':' ✓')+'</div>';
+    if(!isMine) html += '<div class="tc-msg-av2" style="background:linear-gradient(135deg,'+color+','+color+'aa)">'+initials+'</div>';
+    html += '<div style="min-width:0">';
+    if(!isMine) html += '<div style="font-size:10px;color:var(--muted);margin-bottom:2px">'+escHtml(m.name||'')+'</div>';
+    html += '<div class="tc-bbl">'+escHtml(m.text||'')+'</div>';
+    html += '<div class="tc-meta">'+tcTimeStr(m.ts)+(isMine?(m.read?' ✓✓':' ✓'):'')+'</div>';
     html += '</div>';
-    if(isMine) html += '<div class="tc-msg-av" style="background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000">'+tcInitials((_userProfile&&_userProfile.name)||_fbUser.email||'Yo')+'</div>';
+    if(isMine) html += '<div class="tc-msg-av2" style="background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000">'+tcInitials((_userProfile&&_userProfile.name)||_fbUser.email||'Y')+'</div>';
     html += '</div>';
   });
   container.innerHTML = html;
@@ -7631,19 +7669,58 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── Hook into switchTab ──
-var _origSwitchTab = typeof switchTab === 'function' ? switchTab : null;
-if(_origSwitchTab) {
-  switchTab = function(tab) {
-    _origSwitchTab(tab);
-    if(tab==='teamchat') {
-      setTimeout(function(){
-        tcInit();
-        tcListenNotifications();
-      }, 200);
-    }
-  };
+
+// ── Toggle panel collapse ──
+var _tcPanelOpen = true;
+function tcTogglePanel() {
+  var panel = document.getElementById('tc-panel');
+  var icon = document.getElementById('tc-toggle-icon');
+  var app = document.querySelector('.app');
+  _tcPanelOpen = !_tcPanelOpen;
+  if(_tcPanelOpen) {
+    panel.classList.remove('tc-collapsed');
+    if(app) app.style.marginRight = '280px';
+    icon.textContent = '▶';
+  } else {
+    panel.classList.add('tc-collapsed');
+    if(app) app.style.marginRight = '24px';
+    icon.textContent = '◀';
+  }
 }
+
+// ── Close chat ──
+function tcCloseChat() {
+  _tcCurrentChat = null;
+  if(_tcUnsubMessages) { try{_tcUnsubMessages();}catch(e){} _tcUnsubMessages=null; }
+  document.getElementById('tc-empty-state').style.display = 'flex';
+  var cw = document.getElementById('tc-chat-window');
+  cw.style.display = 'none';
+  tcRenderAgentsList();
+}
+
+// ── Auto resize compact ──
+function tcAutoResize2(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 80)+'px';
+}
+
+// ── Auto-init Team Chat on load ──
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    if(typeof _fbUser !== 'undefined' && _fbUser) {
+      tcInit();
+      tcListenNotifications();
+    } else {
+      var checkInterval = setInterval(function() {
+        if(typeof _fbUser !== 'undefined' && _fbUser) {
+          clearInterval(checkInterval);
+          tcInit();
+          tcListenNotifications();
+        }
+      }, 1000);
+    }
+  }, 2000);
+});
 </script>
 
 </body>
