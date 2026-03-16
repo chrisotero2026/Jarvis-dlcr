@@ -3244,9 +3244,30 @@ function deleteClient(id){
     showToast('❌ Solo el admin puede borrar clientes'); return;
   }
   if(!confirm(tr('confirmDel'))) return;
+
+  // If owner deleting a client owned by an agent, also delete from agent's Firebase bucket
+  var agentOwner = delClient && delClient.ownedBy && delClient.ownedBy !== _fbUserId ? delClient.ownedBy : null;
+
   clients=clients.filter(x=>x.id!==id);
   delete callHistory[id];
   saveAll(); closeDetail(); renderAll(); showToast(tr('deleted'));
+
+  // Remove from agent's bucket in Firebase so it doesn't come back on reload
+  if (agentOwner && _fbDb) {
+    (async function() {
+      try {
+        var fb = window._firebase;
+        var aRef  = fb.doc(_fbDb, 'crm', agentOwner);
+        var aSnap = await fb.getDoc(aRef);
+        if (aSnap.exists()) {
+          var aData = aSnap.data();
+          var aCls  = (aData.clients || []).filter(function(c){ return c.id !== id; });
+          await fb.setDoc(aRef, Object.assign({}, aData, { clients: aCls }));
+          console.log('[Owner Delete] Removed client', id, 'from agent', agentOwner);
+        }
+      } catch(ex) { console.warn('Owner delete from agent bucket failed:', ex); }
+    })();
+  }
 }
 
 // ════════════════════════════════════════
