@@ -106,7 +106,7 @@ header { position:relative; }
 .tab.active{color:var(--gold);border-bottom-color:var(--gold);}
 
 /* LAYOUT */
-.app{display:flex;height:calc(100vh - 106px);margin-right:280px;transition:margin-right .25s;}
+.app{display:flex;height:calc(100vh - 106px);margin-right:270px;transition:margin-right .25s;}
 .sidebar{width:200px;background:var(--navy2);border-right:1px solid var(--border);padding:12px 0;flex-shrink:0;overflow-y:auto;}
 .nav-section{padding:6px 14px;margin-bottom:2px;}
 .nav-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;}
@@ -4645,7 +4645,7 @@ function editMember(uid) {
 
   var html = '<div>'
     + '<div style="font-size:16px;font-weight:800;margin-bottom:4px">⚙️ Permisos</div>'
-    + '<div style="font-size:12px;color:#64748b;margin-bottom:14px">' + (member.name||member.email) + '</div>'
+    + '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:14px;padding:8px 10px;background:rgba(255,255,255,.05);border-radius:8px;border-left:3px solid var(--gold)">' + (member.name||member.email||'Sin nombre') + '</div>'
     + '<div style="margin-bottom:14px">'
     + '<label style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Rol (plantilla)</label>'
     + '<select id="edit-role-sel" onchange="applyRoleTemplate()" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:9px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none">'
@@ -4726,7 +4726,7 @@ function assignClientsModal(uid) {
 
   var html = '<div style="padding:4px">'
     + '<div style="font-size:16px;font-weight:800;margin-bottom:4px">📋 Asignar Clientes</div>'
-    + '<div style="font-size:12px;color:#64748b;margin-bottom:14px">' + (member.name || member.email) + '</div>'
+    + '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:14px;padding:8px 10px;background:rgba(255,255,255,.05);border-radius:8px;border-left:3px solid var(--gold)">' + (member.name || member.email || 'Sin nombre') + '</div>'
     + '<input id="assign-search" placeholder="🔍 Buscar cliente..." oninput="filterAssignList()" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px 11px;color:inherit;font-size:13px;font-family:inherit;outline:none;margin-bottom:10px;box-sizing:border-box">'
     + '<div id="assign-list" style="max-height:280px;overflow-y:auto;margin-bottom:14px">';
 
@@ -7153,7 +7153,7 @@ var _origSetLang = typeof setLang === 'function' ? setLang : null;
   /* Panel fijo lateral derecho */
   #tc-panel{
     position:fixed;top:62px;right:0;bottom:0;
-    width:280px;
+    width:270px;
     background:var(--navy2);
     border-left:1px solid var(--border);
     display:flex;flex-direction:column;
@@ -7329,7 +7329,12 @@ function tcInit() {
   if(!_fbUser || !_fbDb) { setTimeout(tcInit, 800); return; }
   if(_tcInitDone) return;
   _tcInitDone = true;
-  tcLoadMyProfile();
+  // Wait for userProfile to load before showing profile
+  if(_userProfile) {
+    tcLoadMyProfile();
+  } else {
+    setTimeout(tcLoadMyProfile, 2000);
+  }
   tcSetMyPresence('online');
   tcLoadAllUsers();
   tcListenPresence();
@@ -7338,14 +7343,20 @@ function tcInit() {
 
 // ── Load ALL users from Firestore users collection ──
 function tcLoadAllUsers() {
-  if(!_fbDb) return;
+  if(!_fbDb || !_fbUser) return;
   var fb = window._firebase;
+  var list = document.getElementById('tc-agents-list');
+  if(list) list.innerHTML = '<div class="tc-sec-lbl">Equipo</div><div style="padding:12px;text-align:center;color:var(--muted);font-size:12px">Cargando...</div>';
   try {
     fb.getDocs(fb.collection(_fbDb,'users')).then(function(snap) {
+      if(snap.empty) {
+        if(list) list.innerHTML = '<div class="tc-sec-lbl">Equipo</div><div style="padding:12px;text-align:center;color:var(--muted);font-size:12px">Sin agentes registrados</div>';
+        return;
+      }
       snap.forEach(function(doc) {
         var d = doc.data();
         var uid = doc.id;
-        if(uid === _fbUser.uid) return;
+        if(!_fbUser || uid === _fbUser.uid) return;
         if(!_tcAgentsData[uid]) {
           _tcAgentsData[uid] = {
             uid: uid,
@@ -7357,20 +7368,26 @@ function tcLoadAllUsers() {
         }
       });
       tcRenderAgentsList();
-    }).catch(function(e){ console.warn('TC loadAllUsers',e); });
-  } catch(e){ console.warn('TC loadAllUsers',e); }
+    }).catch(function(e){
+      console.warn('TC loadAllUsers error:', e);
+      if(list) list.innerHTML = '<div class="tc-sec-lbl">Equipo</div><div style="padding:12px;text-align:center;color:var(--red);font-size:12px">Error cargando agentes</div>';
+    });
+  } catch(e){
+    console.warn('TC loadAllUsers error:', e);
+  }
 }
 
 // ── Load my profile into sidebar ──
 function tcLoadMyProfile() {
+  if(!_fbUser) return;
   var name = (_userProfile&&_userProfile.name) || _fbUser.displayName || _fbUser.email || 'Yo';
   var email = _fbUser.email || '';
   var initials = tcInitials(name);
   var color = tcColor(_fbUser.uid);
-  document.getElementById('tc-my-avatar').textContent = initials;
-  document.getElementById('tc-my-avatar').style.background = 'linear-gradient(135deg,'+color+','+color+'aa)';
-  document.getElementById('tc-my-name').textContent = name;
-  document.getElementById('tc-my-email').textContent = email;
+  var av = document.getElementById('tc-my-avatar');
+  var nm = document.getElementById('tc-my-name');
+  if(av){ av.textContent = initials; av.style.background = 'linear-gradient(135deg,'+color+','+color+'aa)'; }
+  if(nm) nm.textContent = name;
 }
 
 // ── Set my presence in Firebase ──
@@ -7406,7 +7423,7 @@ function tcListenPresence() {
       });
       snap.forEach(function(doc) {
         var d = doc.data();
-        if(!d.uid || d.uid === _fbUser.uid) return;
+        if(!d.uid || !_fbUser || d.uid === _fbUser.uid) return;
         if(_tcAgentsData[d.uid]) {
           // Update existing user status
           _tcAgentsData[d.uid].status = d.status || 'offline';
@@ -7708,23 +7725,27 @@ function tcAutoResize2(el) {
   el.style.height = Math.min(el.scrollHeight, 80)+'px';
 }
 
-// ── Auto-init Team Chat on load ──
-document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(function() {
-    if(typeof _fbUser !== 'undefined' && _fbUser) {
+// ── Auto-init Team Chat — waits for Firebase auth ──
+(function() {
+  var _tcCheckCount = 0;
+  function tryTcInit() {
+    _tcCheckCount++;
+    // Wait for Firebase user AND profile AND DB
+    if(typeof _fbUser !== 'undefined' && _fbUser &&
+       typeof _fbDb   !== 'undefined' && _fbDb) {
       tcInit();
       tcListenNotifications();
-    } else {
-      var checkInterval = setInterval(function() {
-        if(typeof _fbUser !== 'undefined' && _fbUser) {
-          clearInterval(checkInterval);
-          tcInit();
-          tcListenNotifications();
-        }
-      }, 1000);
+    } else if(_tcCheckCount < 30) {
+      setTimeout(tryTcInit, 1000);
     }
-  }, 2000);
-});
+  }
+  // Start checking after DOM is ready
+  if(document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(tryTcInit, 1500); });
+  } else {
+    setTimeout(tryTcInit, 1500);
+  }
+})();
 </script>
 
 </body>
