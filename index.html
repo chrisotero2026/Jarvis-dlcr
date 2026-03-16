@@ -3909,6 +3909,11 @@ function applyLogo() {
 
 // ── Jarvis Logo ──
 var jarvisLogoD = { name:'Jarvis', sub:'AI Assistant', icon:'🤖', size:'sm', img:null };
+// On load, capture the embedded logo image so applyJarvisLogo uses it as default
+(function() {
+  var existingImg = document.getElementById('jarvisLogoIcon') && document.getElementById('jarvisLogoIcon').querySelector('img');
+  if (existingImg && existingImg.src) { jarvisLogoD.img = existingImg.src; }
+})();
 
 function applyJarvisLogo() {
   var iconEl = document.getElementById('jarvisLogoIcon');
@@ -6823,7 +6828,13 @@ function jvSystemPrompt() {
     '=== PERSONA CON QUIEN HABLAS ===',
     '- Nombre: ' + agentName + (isOwnerAgent ? ' (Owner — llámalo "jefe")' : ''),
     '- Rol: ' + (isOwnerAgent ? 'Owner/Dueño de DLCR Real Estate & USA Loans' : agentRole),
-    '- Idioma: ' + (isES ? 'ESPAÑOL' : 'ENGLISH'),
+    '- Idioma configurado en UI: ' + (isES ? 'ESPAÑOL' : 'ENGLISH'),
+    '=== IDIOMA DE RESPUESTA — REGLA OBLIGATORIA ===',
+    'DEBES detectar el idioma del mensaje del usuario y responder SIEMPRE en ese mismo idioma.',
+    'Si el usuario escribe en English → responde en English.',
+    'Si el usuario escribe en Español → responde en Español.',
+    'NO uses el idioma de la UI como guía. USA el idioma del mensaje recibido.',
+    'Esta regla tiene PRIORIDAD MÁXIMA sobre cualquier otra instrucción de idioma.',
     '',
     '=== HORA, FECHA Y CONTEXTO ===',
     '- Hora: ' + hour + 'h',
