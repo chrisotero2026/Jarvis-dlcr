@@ -8592,7 +8592,7 @@ function jvBuildGreeting() {
                     : '<br><small style="color:var(--muted)">How was the weekend? Ready to start the week?</small>';
   } else if (dow === 5) {
     followUp = isES ? '<br><small style="color:var(--muted)">¡Ya es viernes! ¿Cerramos algo esta semana?</small>'
-                    : '<br><small style="color:var(--muted)">It's Friday! Did we close anything this week?</small>';
+                    : '<br><small style="color:var(--muted)">It&#39;s Friday! Did we close anything this week?</small>';
   } else if (hour < 9 || hour >= 22) {
     followUp = isES ? '<br><small style="color:var(--muted)">¿Descansó bien? ¿En qué le ayudo hoy?</small>'
                     : '<br><small style="color:var(--muted)">Did you rest well? What can I help with today?</small>';
@@ -8622,7 +8622,7 @@ var AUTO_TEMPLATES = {
   ],
   welcome_en: [
     'Hi {nombre}, this is {agente} from DLCR Real Estate & Loans. Thank you for your interest! When would be a good time to connect?',
-    'Hello {nombre}! I'm {agente} from DLCR. I'd love to help you find your perfect home. Do you have a few minutes to chat?',
+    "Hello {nombre}! I'm {agente} from DLCR. I'd love to help you find your perfect home. Do you have a few minutes to chat?",
   ],
   followup_es: [
     'Hola {nombre}, soy {agente} de DLCR. Le escribo para saber si tiene alguna pregunta sobre propiedades. Estoy disponible cuando usted quiera.',
