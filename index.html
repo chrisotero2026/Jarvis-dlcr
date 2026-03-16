@@ -8766,19 +8766,50 @@ function autoShowAction(c, type, message) {
     score:    isES ? '🎯 Status actualizado'       : '🎯 Status updated',
   };
 
-  toast.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-      '<div style="font-size:13px;font-weight:700;color:var(--gold)">' + (typeLabels[type]||'🤖 Auto') + '</div>' +
-      '<span onclick="document.getElementById('auto-action-toast').remove()" style="cursor:pointer;color:var(--muted);font-size:16px">✕</span>' +
-    '</div>' +
-    '<div style="font-size:13px;font-weight:600;margin-bottom:4px">👤 ' + escHtml(c.name) + '</div>' +
-    (message ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">' + escHtml(message) + '</div>' : '') +
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">' +
-      (c.phone ? '<button onclick="autoActionSMS(''+c.id+'',''+encodeURIComponent(message)+'')" style="background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#22c55e;border-radius:8px;padding:7px 4px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">📱 SMS</button>' : '') +
-      (c.email ? '<button onclick="autoActionEmail(''+c.id+'',''+encodeURIComponent(message)+'')" style="background:rgba(74,133,245,.15);border:1px solid rgba(74,133,245,.3);color:#4a85f5;border-radius:8px;padding:7px 4px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✉️ Email</button>' : '') +
-      '<button onclick="autoActionCall(''+c.id+'')" style="background:rgba(240,165,0,.15);border:1px solid rgba(240,165,0,.3);color:var(--gold);border-radius:8px;padding:7px 4px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">📞 Llamar</button>' +
-      '<button onclick="autoMarkSent('+c.id+',''+type+'');document.getElementById('auto-action-toast').remove()" style="grid-column:1/-1;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:7px;font-size:11px;cursor:pointer;font-family:inherit">✓ Marcar como hecho</button>' +
-    '</div>';
+  // Build toast with DOM (avoids quote conflicts in onclick handlers)
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px';
+  var lbl = document.createElement('div');
+  lbl.style.cssText = 'font-size:13px;font-weight:700;color:var(--gold)';
+  lbl.textContent = typeLabels[type]||'🤖 Auto';
+  var cls = document.createElement('span');
+  cls.textContent = '✕';
+  cls.style.cssText = 'cursor:pointer;color:var(--muted);font-size:16px';
+  cls.addEventListener('click', function(){ var t=document.getElementById('auto-action-toast'); if(t) t.remove(); });
+  hdr.appendChild(lbl); hdr.appendChild(cls);
+  toast.appendChild(hdr);
+
+  var nm = document.createElement('div');
+  nm.style.cssText = 'font-size:13px;font-weight:600;margin-bottom:4px';
+  nm.textContent = '👤 ' + c.name;
+  toast.appendChild(nm);
+
+  if (message) {
+    var msg = document.createElement('div');
+    msg.style.cssText = 'font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5';
+    msg.textContent = message;
+    toast.appendChild(msg);
+  }
+
+  var grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px';
+
+  function mkBtn(emoji, label, color, bgColor, handler, fullWidth) {
+    var b = document.createElement('button');
+    b.textContent = emoji + ' ' + label;
+    b.style.cssText = 'background:rgba('+bgColor+');border:1px solid rgba('+bgColor.replace(',.15',',.3')+');color:'+color+';border-radius:8px;padding:7px 4px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit' + (fullWidth ? ';grid-column:1/-1' : '');
+    b.addEventListener('click', handler);
+    return b;
+  }
+
+  if (c.phone) grid.appendChild(mkBtn('📱','SMS','#22c55e','34,197,94,.15', function(){ autoActionSMS(c.id, message); }));
+  if (c.email) grid.appendChild(mkBtn('✉️','Email','#4a85f5','74,133,245,.15', function(){ autoActionEmail(c.id, message); }));
+  grid.appendChild(mkBtn('📞','Llamar','var(--gold)','240,165,0,.15', function(){ autoActionCall(c.id); }));
+  grid.appendChild(mkBtn('✓','Marcar como hecho','var(--muted)','255,255,255,.05', function(){
+    autoMarkSent(c.id, type);
+    var t=document.getElementById('auto-action-toast'); if(t) t.remove();
+  }, true));
+  toast.appendChild(grid);
 
   document.body.appendChild(toast);
 
