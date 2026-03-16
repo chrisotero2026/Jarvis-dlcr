@@ -1136,10 +1136,6 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
           </div>
         </div>
       </div>
-    </div>
-
-
-    <!-- ═══ VIEW: JARVIS AI ═══ -->
       </div>
       <div class="pipe-view" id="pipeView"></div>
     </div>
@@ -2599,6 +2595,10 @@ function updateStats(){
 }
 
 function toggleTemp(t){ tempFlt=tempFlt===t?'':t; document.getElementById('fltHot').classList.toggle('on',tempFlt==='hot'); document.getElementById('fltCold').classList.toggle('on',tempFlt==='cold'); renderClients(); }
+function openMobileSidebar(){var s=document.getElementById('mainSidebar');var o=document.getElementById('sidebarOverlay');if(s)s.classList.add('open');if(o)o.classList.add('active');}
+function closeMobileSidebar(){var s=document.getElementById('mainSidebar');var o=document.getElementById('sidebarOverlay');if(s)s.classList.remove('open');if(o)o.classList.remove('active');}
+function setMobNav(btn){document.querySelectorAll('.mob-nav-btn').forEach(function(b){b.classList.remove('active');});if(btn)btn.classList.add('active');}
+function updateMobFilter(btn){document.querySelectorAll('.mob-filter-chip').forEach(function(b){b.classList.remove('active');});if(btn)btn.classList.add('active');}
 function filterNav(type,el){ typeFlt=type; document.querySelectorAll('.nav-item:not(.folder-item)').forEach(n=>n.classList.remove('active')); el.classList.add('active'); renderClients(); }
 
 // ════════════════════════════════════════
