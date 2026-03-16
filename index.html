@@ -8527,7 +8527,7 @@ function jvHandleSendDocs(params) {
   msgDiv.innerHTML = '<div style="font-size:11px;font-weight:700;color:#22c55e;margin-bottom:6px">📤 Lista lista para enviar a ' + clientName + '</div>' +
     '<pre style="margin:0;white-space:pre-wrap;color:var(--text);font-size:11px;font-family:inherit">' + docList + '</pre>' +
     '<div style="display:flex;gap:6px;margin-top:8px">' +
-      '<button onclick="navigator.clipboard.writeText(this.parentNode.previousElementSibling.textContent);showToast('✅ Copiado!')" style="background:rgba(34,197,94,.2);border:1px solid rgba(34,197,94,.4);color:#22c55e;border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:inherit">📋 Copiar</button>' +
+      '<button onclick="navigator.clipboard.writeText(this.parentNode.previousElementSibling.textContent);showToast(&quot;✅ Copiado!&quot;)" style="background:rgba(34,197,94,.2);border:1px solid rgba(34,197,94,.4);color:#22c55e;border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:inherit">📋 Copiar</button>' +
       (window.innerWidth < 900 ? '<a href="sms:?body=' + encodeURIComponent(docList) + '" style="background:rgba(74,133,245,.2);border:1px solid rgba(74,133,245,.4);color:#4a85f5;border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:inherit;text-decoration:none">📱 SMS</a>' : '') +
     '</div>';
 
