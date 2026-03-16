@@ -6166,18 +6166,7 @@ function jvInit() {
     var today  = new Date().toISOString().split('T')[0];
     var venc   = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.nextCall && c.nextCall < today && c.stage !== 'closed'; }).length : 0;
     var statusLine = totalC > 0 ? ('<br><small style="color:var(--muted)">📊 ' + totalC + ' clientes · 🔥 ' + hotC + ' calientes' + (venc > 0 ? ' · <span style="color:#ef4444">⚠️ ' + venc + ' vencidos</span>' : '') + '</small>') : '';
-    var isOwnerG = isOwner();
-    var agentFirstName = (_userProfile && _userProfile.name) ? _userProfile.name.split(' ')[0] : userName;
-    var isESG = (typeof lang !== 'undefined') ? lang === 'es' : true;
-    var greetWord, bossWord;
-    if(isESG) {
-      greetWord = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
-      bossWord  = isOwnerG ? 'jefe' : agentFirstName;
-    } else {
-      greetWord = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-      bossWord  = isOwnerG ? 'boss' : agentFirstName;
-    }
-    bbl.innerHTML = greetWord + ', <strong>' + bossWord + '</strong> 👊' + statusLine;
+    bbl.innerHTML = (typeof jvBuildGreeting === 'function') ? jvBuildGreeting() : 'Hola 👊';
   }
   jvBuildCmds();
   jvCheckStatus();
@@ -6262,6 +6251,8 @@ async function jvSend(override) {
     jvAddMsg('bot', botReply);
     jvAddToHistory('assistant', botReply);
     jvCheckStatus();
+    if(d.memory && typeof d.memory === 'object') jvSaveMemory(d.memory);
+    if(d.action === 'send_docs' && d.params) jvHandleSendDocs(d.params);
   } catch(e) {
     jvHideTyping();
     jvAddMsg('bot',
@@ -6487,88 +6478,159 @@ function jvAddToHistory(role, content) {
 
 // ── System prompt con personalidad completa ──
 function jvSystemPrompt() {
-  var now = new Date();
-  var hour = now.getHours();
-  var isES = (typeof lang !== "undefined") ? lang === "es" : true;
-  var today = now.toLocaleDateString(isES ? 'es' : 'en', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-  var todayISO = now.toISOString().split('T')[0];
+  var now       = new Date();
+  var hour      = now.getHours();
+  var dow       = now.getDay(); // 0=Sun,6=Sat
+  var isES      = (typeof lang !== "undefined") ? lang === "es" : true;
+  var today     = now.toLocaleDateString(isES ? 'es' : 'en', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  var todayISO  = now.toISOString().split('T')[0];
+  var isFriday  = dow === 5;
+  var isMonday  = dow === 1;
+  var isWeekend = dow === 0 || dow === 6;
 
   var sat = new Date(now);
   var daysToSat = (6 - sat.getDay() + 7) % 7 || 7;
   sat.setDate(sat.getDate() + daysToSat);
   var satISO = sat.toISOString().split('T')[0];
 
+  // CRM data
   var totalClients  = (typeof clients !== 'undefined') ? clients.length : 0;
   var hotClients    = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.temp==='hot'; }).length : 0;
   var warmClients   = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.temp==='warm'; }).length : 0;
+  var coldClients   = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.temp==='cold'; }).length : 0;
   var closedClients = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.stage==='closed'; }).length : 0;
   var totalIncome   = (typeof incomeTxs !== 'undefined') ? incomeTxs.reduce(function(s,t){ return s+(t.amount||0); }, 0) : 0;
   var overdueC      = (typeof clients !== 'undefined') ? clients.filter(function(c){ return c.nextCall && c.nextCall < todayISO && c.stage !== 'closed'; }).length : 0;
-  var agentName     = (_userProfile && _userProfile.name) ? _userProfile.name.split(' ')[0] : ((_fbUser && _fbUser.displayName) ? _fbUser.displayName.split(' ')[0] : 'Jefe');
-  var agentRole     = (_userProfile && _userProfile.role) ? _userProfile.role : 'agent';
-  var isOwnerAgent  = agentRole === 'owner';
 
-  var hotList = (typeof clients !== 'undefined')
-    ? clients.filter(function(c){ return c.temp==='hot' && c.stage !== 'closed'; })
-             .slice(0,5).map(function(c){ return c.name + ' (' + (c.stage||'lead') + (c.nextCall ? ', próxima llamada: '+c.nextCall : '') + ')'; }).join(', ')
-    : 'ninguno';
+  // Today's calls
+  var todayCalls = (typeof clients !== 'undefined')
+    ? clients.filter(function(c){ return c.nextCall === todayISO && c.stage !== 'closed'; })
+             .map(function(c){ return c.name + ' (' + (c.phone||'sin tel') + ') — ' + (c.type||'') + ' ' + (c.stage||''); })
+    : [];
+
+  // Tomorrow's calls
+  var tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
+  var tomorrowISO = tomorrow.toISOString().split('T')[0];
+  var tomorrowCalls = (typeof clients !== 'undefined')
+    ? clients.filter(function(c){ return c.nextCall === tomorrowISO && c.stage !== 'closed'; })
+             .map(function(c){ return c.name; })
+    : [];
+
+  // This week overdue
+  var urgentClients = (typeof clients !== 'undefined')
+    ? clients.filter(function(c){ return c.temp==='hot' && c.stage !== 'closed' && c.nextCall && c.nextCall <= todayISO; })
+             .slice(0,5).map(function(c){ return c.name + (c.nextCall ? ' (vencida: '+c.nextCall+')' : ''); })
+    : [];
+
+  // Agent info
+  var agentName    = (_userProfile && _userProfile.name) ? _userProfile.name.split(' ')[0] : ((_fbUser && _fbUser.displayName) ? _fbUser.displayName.split(' ')[0] : 'Jefe');
+  var agentRole    = (_userProfile && _userProfile.role) ? _userProfile.role : 'agent';
+  var isOwnerAgent = agentRole === 'owner';
+
+  // Persistent memory from localStorage
+  var jvMemKey = 'jarvis_memory_' + (_fbUser ? _fbUser.uid : 'default');
+  var jvMem = {};
+  try { jvMem = JSON.parse(localStorage.getItem(jvMemKey) || '{}'); } catch(e){}
+
+  var memLines = Object.entries(jvMem).map(function(e){ return '- ' + e[0] + ': ' + e[1]; }).join('\n') || '(sin memoria guardada aún)';
+
+  // Contextual situation for greeting
+  var situation = '';
+  if(isMonday) situation = 'Hoy es lunes — inicio de semana laboral.';
+  else if(isFriday) situation = 'Hoy es viernes — cierre de semana.';
+  else if(isWeekend) situation = 'Es fin de semana.';
+  if(todayCalls.length > 0) situation += ' Tiene ' + todayCalls.length + ' llamada(s) agendada(s) para hoy.';
+  if(overdueC > 0) situation += ' Hay ' + overdueC + ' cliente(s) vencido(s) sin contactar.';
 
   return [
-    '=== IDENTIDAD ===',
-    'Eres Jarvis, el asistente de inteligencia artificial de DLCR Real Estate & Loans.',
-    'Eres extremadamente inteligente, empático y conoces el mundo del real estate mejor que nadie.',
-    'Hablas como un colega de confianza con años de experiencia — directo, cálido, nunca robótico.',
-    'Conoces a fondo el mercado de VA/MD/DC: precios, zonas, tendencias, tipos de préstamo.',
+    '=== IDENTIDAD DE JARVIS ===',
+    'Eres Jarvis, el asistente personal de inteligencia artificial de DLCR Real Estate & Loans.',
+    'Eres como el mejor asistente ejecutivo que existe — inteligente, empático, proactivo, y siempre enfocado en hacer que el negocio avance.',
+    'Conoces el mercado de VA/MD/DC, tasas, tipos de préstamos, etapas de transacciones.',
+    'Te anticipas a lo que el agente necesita ANTES de que te lo pida.',
     '',
-    '=== AGENTE ACTUAL ===',
-    '- Nombre: ' + agentName,
-    '- Rol: ' + (isOwnerAgent ? 'Owner/Jefe' : agentRole),
-    '- Idioma interfaz: ' + (isES ? 'ESPAÑOL' : 'ENGLISH'),
+    '=== PERSONA CON QUIEN HABLAS ===',
+    '- Nombre: ' + agentName + (isOwnerAgent ? ' (Owner — llámalo "jefe")' : ''),
+    '- Rol: ' + (isOwnerAgent ? 'Owner/Dueño de DLCR' : agentRole),
+    '- Idioma: ' + (isES ? 'ESPAÑOL' : 'ENGLISH'),
     '',
-    '=== HORA Y FECHA ===',
-    '- Hora actual: ' + hour + 'h (' + (hour < 12 ? 'mañana' : hour < 18 ? 'tarde' : 'noche') + ')',
-    '- Hoy: ' + today,
-    '- ISO hoy: ' + todayISO,
+    '=== HORA, FECHA Y CONTEXTO ===',
+    '- Hora: ' + hour + 'h',
+    '- Hoy: ' + today + ' (' + (isMonday?'LUNES':isFriday?'VIERNES':isWeekend?'FIN DE SEMANA':'día laboral') + ')',
+    '- ISO: ' + todayISO,
     '- Próximo sábado: ' + satISO,
+    '- Situación del día: ' + (situation || 'Día normal de trabajo.'),
     '',
     '=== CRM EN TIEMPO REAL ===',
     '- Total clientes: ' + totalClients,
-    '- Calientes 🔥: ' + hotClients,
-    '- Tibios 🌡️: ' + warmClients,
-    '- Cerrados ✅: ' + closedClients,
-    '- Vencidos ⚠️: ' + overdueC,
-    '- Ingresos totales: $' + totalIncome.toLocaleString(),
-    '- Clientes calientes activos: ' + (hotList || 'ninguno'),
+    '- 🔥 Calientes: ' + hotClients + ' | 🌡️ Tibios: ' + warmClients + ' | ❄️ Fríos: ' + coldClients,
+    '- ✅ Cerrados: ' + closedClients + ' | ⚠️ Vencidos: ' + overdueC,
+    '- 💰 Ingresos totales: $' + totalIncome.toLocaleString(),
+    '- 📞 Llamadas HOY (' + todayCalls.length + '): ' + (todayCalls.join(' | ') || 'ninguna'),
+    '- 📅 Llamadas MAÑANA: ' + (tomorrowCalls.join(', ') || 'ninguna'),
+    '- 🚨 Urgentes/vencidos: ' + (urgentClients.join(' | ') || 'ninguno'),
     '',
-    '=== PERSONALIDAD Y FORMA DE HABLAR ===',
-    '1. SALUDO INICIAL: Solo al primer mensaje de la sesión, saluda con:',
-    '   - Si es español: "Buenos días " / "Buenas tardes " / "Buenas noches " + (si es owner/jefe: "jefe" sino el nombre del agente). Nada más.',
-    '   - Si es inglés: "Good morning " / "Good afternoon " / "Good evening " + (si es owner: "boss" sino el nombre). Nada más.',
-    '   - Después del saludo inicial, NUNCA vuelvas a saludar en la misma sesión.',
-    '2. Habla de forma natural, como un colega experimentado. No uses frases genéricas de bot.',
-    '3. Cuando cierren un cliente: celebra con energía genuina. Ej: "¡Eso es! 🎉 Otro cierre para el board."',
-    '4. Cuando haya clientes vencidos: muestra preocupación real. Ej: "Oye, tienes ' + overdueC + ' clientes sin follow-up — ¿quieres que los revisemos ahora?"',
-    '5. Cuando el pipeline esté bajo: motiva con consejos reales de real estate, no frases vacías.',
-    '6. Si alguien pregunta sobre estrategia, mercado o tasas: responde como experto, no como máquina.',
-    '7. USA el nombre del agente naturalmente en la conversación, no en cada mensaje.',
-    '8. Sé conciso. No escribas párrafos largos cuando una frase directa funciona mejor.',
-    '9. Nunca digas "Claro que sí!" ni "Por supuesto!" ni "¡Entendido!" — son frases de bot.',
-    '10. Si alguien está frustrado o estresado, primero reconoce el sentimiento, luego resuelve.',
+    '=== MEMORIA PERSONAL (lo que recuerdas de conversaciones anteriores) ===',
+    memLines,
+    '',
+    '=== CÓMO HABLAS Y TE COMPORTAS ===',
+    '1. SALUDO AL INICIO DEL DÍA: Solo en el PRIMER mensaje usa UN saludo natural según la hora:',
+    '   ES: "Buenos días jefe" / "Buenas tardes jefe" / "Buenas noches jefe"',
+    '   EN: "Good morning boss" / "Good afternoon boss" / "Good evening boss"',
+    '   Luego INMEDIATAMENTE agrega algo relevante del día:',
+    '   - Si hay llamadas hoy: "Le comento, hoy tiene ' + todayCalls.length + ' llamada(s) programada(s). ¿Se las marco y le paso la lista?"',
+    '   - Si es lunes: pregunta cómo estuvo el fin de semana',
+    '   - Si es viernes: comenta que es viernes y cómo va la semana',
+    '   - Si hay vencidos: alerta sobre ellos de inmediato',
+    '   - Si el pipeline está vacío: motiva con energía real',
+    '2. PREGUNTAS EMPÁTICAS — usa estas NATURALMENTE cuando sea apropiado:',
+    '   - Al inicio del día: "¿Cómo está el día de hoy?" / "¿Durmió bien?" / "¿Qué tal el fin de semana?"',
+    '   - Después de una llamada difícil: "¿Cómo le fue? ¿Quiere que archive algo de esa llamada?"',
+    '   - Cuando cierra un deal: "¡Eso es! 🎉 ¿Quiere que registremos el cierre ahora?"',
+    '   - Cuando hay estrés: "Oiga, respire. Vamos paso a paso."',
+    '3. PROACTIVIDAD — siempre ofrece el siguiente paso:',
+    '   - Después de agendar llamada: "¿Quiere que le mande un recordatorio 1 hora antes?"',
+    '   - Después de hablar con cliente: "¿Programo follow-up en X días?"',
+    '   - Cuando pide lista de docs: envía la lista completa y pregunta si quiere mandarla',
+    '4. DOCUMENTOS DE COMPRA — cuando te pidan, envía esta lista:',
+    '   📋 DOCUMENTOS PARA COMPRA DE PROPIEDAD:',
+    '   • 2 años de tax returns (W-2 o 1099)',
+    '   • 2 meses de bank statements (todas las cuentas)',
+    '   • Pay stubs de los últimos 30 días',
+    '   • ID válida (licencia o pasaporte)',
+    '   • Número de Seguro Social',
+    '   • Historial de residencia últimos 2 años',
+    '   • Si es self-employed: P&L y business returns',
+    '5. NO uses "Claro que sí", "Por supuesto", "Entendido", "Excelente pregunta" — son frases de bot.',
+    '6. Sé CONCISO. Una frase directa vale más que tres párrafos.',
+    '7. USA la memoria guardada para personalizar — si sabes algo del agente, úsalo.',
+    '8. Cuando el agente diga que terminó una llamada, SIEMPRE pregunta: "¿Qué tal le fue? ¿Quiere que archive algo?"',
+    '9. Si dice "ponlo para llamarlo en X días" → agenda nextCall = hoy + X días Y guarda en memoria que hay que mandar docs antes.',
+    '',
+    '=== ACCIONES DE MEMORIA ===',
+    'Cuando el agente te dé información personal/preferencias que deba recordar, incluye en el JSON:',
+    '"memory": { "clave": "valor" } — ejemplos: "prefiere_llamadas": "mañanas", "meta_mensual": "20000", "ultimo_cierre": "Juan García"',
+    'Estas se guardan automáticamente en localStorage para sesiones futuras.',
+    '',
+    '=== ACCIÓN ESPECIAL: send_docs ===',
+    'Cuando el agente diga "mándale los documentos" o "envíale la lista" a un cliente:',
+    'action: "send_docs", params: { clientName: "nombre", method: "sms/email" }',
+    'El reply debe incluir la lista completa de documentos formateada lista para copiar/pegar.',
     '',
     '=== ESTRUCTURA JSON OBLIGATORIA ===',
-    'SIEMPRE responde con JSON válido, sin texto antes ni después, sin markdown:',
-    '{ "action": "<acción>", "params": {}, "reply": "<tu respuesta como Jarvis>", "confirm": true/false }',
+    '{ "action": "<acción>", "params": {}, "reply": "<respuesta de Jarvis>", "confirm": true/false, "memory": {} }',
+    '"memory" es OPCIONAL — solo inclúyelo si hay algo nuevo que recordar.',
     '',
     '=== ACCIONES DISPONIBLES ===',
-    '1. crm_add_client — params: name*, phone, type(buy/sell/refi/buysell/loan/referral), temp(hot/warm/cold), stage(lead/contacted/qualified/negotiation/contract/closed), email, address, amount, notes, nextCall(YYYY-MM-DD)',
-    '2. crm_schedule_call — params: clientName*, date(YYYY-MM-DD)*, time(HH:MM 24h), notes. "sábado"=' + satISO + '. "6pm"="18:00"',
-    '3. income_add — params: clientName*, amount*, category(real_estate/loan/referral/other), type, refby, refAmount, refName2, refAmount2, date, notes',
+    '1. crm_add_client — params: name*, phone, type(buy/sell/refi/buysell/loan/referral), temp(hot/warm/cold), stage, email, address, amount, notes, nextCall(YYYY-MM-DD)',
+    '2. crm_schedule_call — params: clientName*, date(YYYY-MM-DD)*, time(HH:MM), notes. "sábado"=' + satISO,
+    '3. income_add — params: clientName*, amount*, category, type, refby, refAmount, date, notes',
     '4. crm_move_stage — params: clientName*, stage*',
-    '5. crm_update_client — params: name*, field(phone/email/address/amount/notes/temp/stage/type)*, value*',
+    '5. crm_update_client — params: name*, field*, value*',
     '6. crm_list — params: filter(all/hot/warm/cold), stage',
     '7. make_call — params: clientName*',
     '8. crm_summary — params: {}',
-    '9. chat_reply — params: { message: "respuesta" } — usar para conversación, consejos, preguntas generales',
+    '9. chat_reply — params: { message: "..." } — conversación general, consejos, preguntas empáticas',
     '10. crm_delete_client — params: clientName*',
     '11. crm_show_vencidos — params: {}',
     '12. crm_show_cerrados — params: { period: "month/year/all" }',
@@ -6578,19 +6640,22 @@ function jvSystemPrompt() {
     '16. income_summary — params: { period: "month/year/all" }',
     '17. crm_next_calls — params: { days: 7 }',
     '18. crm_search — params: { query: "nombre" }',
-    '19. navigate — params: { tab: "clients/pipeline/team/income/myincome/calendar/mort/jarvis" }',
+    '19. navigate — params: { tab: "clients/pipeline/team/income/myincome/calendar/mort/jarvis/dashboard" }',
     '20. crm_team_summary — params: {}',
     '21. crm_daily_report — params: {}',
     '22. crm_filter_type — params: { type: "buy/sell/refi/loan/referral" }',
+    '23. send_docs — params: { clientName*, method(sms/email/whatsapp) }',
     '',
     '=== REGLAS CRÍTICAS ===',
-    '- JSON válido siempre, sin markdown, sin texto extra',
-    '- refby+refAmount = primer referido, refName2+refAmount2 = segundo',
-    '- Si falta info crítica: pídela con confirm:false',
-    '- Saludo solo en el PRIMER mensaje de la sesión',
-    '- En el reply habla siempre como Jarvis humano, nunca como bot',
+    '- JSON válido siempre, sin markdown, sin texto extra fuera del JSON',
+    '- Saludo SOLO en el primer mensaje de la sesión',
+    '- NUNCA repitas el saludo',
+    '- Después de cada llamada completa → pregunta cómo fue y ofrece archivar',
+    '- Si dice "en X días" → calcula la fecha exacta desde hoy (' + todayISO + ')',
+    '- Usa la memoria para hacer referencias personales naturales',
   ].join('\n');
 }
+
 
 // ── Main entry point — called when user sends message in Jarvis tab ──
 async function jvSend(override) {
@@ -6646,7 +6711,11 @@ async function jvFallbackServer(msg) {
     });
     var d2 = await r2.json();
     jvHideTyping();
-    jvAddMsg('bot', d2.reply || d2.message || 'Sin respuesta');
+    var botReply2 = d2.reply || d2.message || 'Sin respuesta';
+    jvAddMsg('bot', botReply2);
+    jvAddToHistory('assistant', botReply2);
+    if(d2.memory && typeof d2.memory === 'object') jvSaveMemory(d2.memory);
+    if(d2.action === 'send_docs' && d2.params) jvHandleSendDocs(d2.params);
   } catch(e2) {
     jvHideTyping();
     jvAddMsg('bot',
@@ -8152,6 +8221,125 @@ function renderDashboard() {
 
 function dashKpi(label, value, sub) {
   return '<div class="dash-kpi"><div class="dash-kpi-val">'+value+'</div><div class="dash-kpi-lbl">'+label+'</div><div class="dash-kpi-sub">'+sub+'</div></div>';
+}
+
+
+
+// ══════════════════════════════════════════════════════
+//  JARVIS MEMORIA PERSISTENTE + FUNCIONES ESPECIALES
+// ══════════════════════════════════════════════════════
+
+// ── Guardar memoria en localStorage ──
+function jvSaveMemory(memObj) {
+  try {
+    var key = 'jarvis_memory_' + (_fbUser ? _fbUser.uid : 'default');
+    var existing = {};
+    try { existing = JSON.parse(localStorage.getItem(key) || '{}'); } catch(e){}
+    Object.assign(existing, memObj);
+    localStorage.setItem(key, JSON.stringify(existing));
+    console.log('[Jarvis Memory] Guardado:', memObj);
+  } catch(e) { console.warn('[Jarvis Memory] Error:', e); }
+}
+
+// ── Leer memoria ──
+function jvGetMemory() {
+  try {
+    var key = 'jarvis_memory_' + (_fbUser ? _fbUser.uid : 'default');
+    return JSON.parse(localStorage.getItem(key) || '{}');
+  } catch(e) { return {}; }
+}
+
+// ── Manejar acción send_docs ──
+function jvHandleSendDocs(params) {
+  var isES = (typeof lang !== 'undefined') ? lang === 'es' : true;
+  var clientName = params.clientName || 'el cliente';
+  var method = params.method || 'sms';
+
+  var docList = isES
+    ? '📋 *DOCUMENTOS PARA COMPRA DE PROPIEDAD*\n\n' +
+      '• 2 años de Tax Returns (W-2 o 1099)\n' +
+      '• 2 meses de Bank Statements (todas las cuentas)\n' +
+      '• Pay Stubs últimos 30 días\n' +
+      '• ID válida (licencia o pasaporte)\n' +
+      '• Número de Seguro Social\n' +
+      '• Historial de residencia últimos 2 años\n' +
+      '• Si es self-employed: P&L y Business Tax Returns\n\n' +
+      'Favor enviar a: ventas@dlcrhb.com\n' +
+      'DLCR Real Estate & Loans'
+    : '📋 *PURCHASE DOCUMENTS CHECKLIST*\n\n' +
+      '• 2 years Tax Returns (W-2 or 1099)\n' +
+      '• 2 months Bank Statements (all accounts)\n' +
+      '• Last 30 days Pay Stubs\n' +
+      '• Valid ID (license or passport)\n' +
+      '• Social Security Number\n' +
+      '• 2-year residence history\n' +
+      '• If self-employed: P&L and Business Returns\n\n' +
+      'Please send to: ventas@dlcrhb.com\n' +
+      'DLCR Real Estate & Loans';
+
+  // Show copy-ready message box
+  var msgDiv = document.createElement('div');
+  msgDiv.style.cssText = 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:12px 14px;margin-top:8px;font-size:12px;';
+  msgDiv.innerHTML = '<div style="font-size:11px;font-weight:700;color:#22c55e;margin-bottom:6px">📤 Lista lista para enviar a ' + clientName + '</div>' +
+    '<pre style="margin:0;white-space:pre-wrap;color:var(--text);font-size:11px;font-family:inherit">' + docList + '</pre>' +
+    '<div style="display:flex;gap:6px;margin-top:8px">' +
+      '<button onclick="navigator.clipboard.writeText(this.parentNode.previousElementSibling.textContent);showToast('✅ Copiado!')" style="background:rgba(34,197,94,.2);border:1px solid rgba(34,197,94,.4);color:#22c55e;border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:inherit">📋 Copiar</button>' +
+      (window.innerWidth < 900 ? '<a href="sms:?body=' + encodeURIComponent(docList) + '" style="background:rgba(74,133,245,.2);border:1px solid rgba(74,133,245,.4);color:#4a85f5;border-radius:7px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:inherit;text-decoration:none">📱 SMS</a>' : '') +
+    '</div>';
+
+  var jvMsgs = document.getElementById('jvMsgs');
+  if(jvMsgs) {
+    jvMsgs.appendChild(msgDiv);
+    jvMsgs.scrollTop = jvMsgs.scrollHeight;
+  }
+}
+
+// ── Saludo mejorado con contexto del día ──
+function jvBuildGreeting() {
+  var now = new Date();
+  var hour = now.getHours();
+  var dow  = now.getDay();
+  var isES = (typeof lang !== 'undefined') ? lang === 'es' : true;
+  var isOwnerG = isOwner();
+  var agentFirstName = (_userProfile && _userProfile.name) ? _userProfile.name.split(' ')[0]
+    : ((_fbUser && _fbUser.displayName) ? _fbUser.displayName.split(' ')[0] : null);
+  var bossWord = isOwnerG ? (isES ? 'jefe' : 'boss') : (agentFirstName || (isES ? 'agente' : 'agent'));
+
+  var greet = hour < 12 ? (isES ? 'Buenos días' : 'Good morning')
+            : hour < 18 ? (isES ? 'Buenas tardes' : 'Good afternoon')
+            :              (isES ? 'Buenas noches' : 'Good evening');
+
+  var todayISO = now.toISOString().split('T')[0];
+  var todayCalls = (typeof clients !== 'undefined')
+    ? clients.filter(function(c){ return c.nextCall === todayISO && c.stage !== 'closed'; })
+    : [];
+  var overdueCount = (typeof clients !== 'undefined')
+    ? clients.filter(function(c){ return c.nextCall && c.nextCall < todayISO && c.stage !== 'closed'; }).length
+    : 0;
+  var hotCount = (typeof clients !== 'undefined')
+    ? clients.filter(function(c){ return c.temp === 'hot' && c.stage !== 'closed'; }).length
+    : 0;
+
+  // Build status line
+  var statusLine = '';
+  if(typeof clients !== 'undefined' && clients.length > 0) {
+    var parts = [];
+    if(todayCalls.length > 0) parts.push('📞 ' + todayCalls.length + (isES ? ' llamada(s) hoy' : ' call(s) today'));
+    if(overdueCount > 0)      parts.push('⚠️ ' + overdueCount + (isES ? ' vencido(s)' : ' overdue'));
+    if(hotCount > 0)          parts.push('🔥 ' + hotCount + (isES ? ' calientes' : ' hot'));
+    if(parts.length > 0) statusLine = '<br><small style="color:var(--muted)">' + parts.join(' · ') + '</small>';
+  }
+
+  // Contextual follow-up question
+  var followUp = '';
+  if(dow === 1) followUp = isES ? '<br><small style="color:var(--muted)">¿Qué tal el fin de semana?</small>' : '<br><small style="color:var(--muted)">How was your weekend?</small>';
+  else if(dow === 5) followUp = isES ? '<br><small style="color:var(--muted)">¡Ya es viernes! ¿Cómo va la semana?</small>' : '<br><small style="color:var(--muted)">It's Friday! How was the week?</small>';
+  else if(hour < 9 || hour >= 22) followUp = isES ? '<br><small style="color:var(--muted)">¿Descansó bien?</small>' : '<br><small style="color:var(--muted)">Did you sleep well?</small>';
+  else if(todayCalls.length > 0) followUp = isES
+    ? '<br><small style="color:var(--muted)">Tiene ' + todayCalls.length + ' llamada(s) programada(s) hoy. ¿Se las marco y se las paso?</small>'
+    : '<br><small style="color:var(--muted)">You have ' + todayCalls.length + ' call(s) scheduled today. Want me to pull them up?</small>';
+
+  return greet + ', <strong>' + bossWord + '</strong> 👊' + statusLine + followUp;
 }
 
 
