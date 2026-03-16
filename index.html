@@ -6618,25 +6618,31 @@ function jvSystemPrompt() {
     '=== MEMORIA PERSONAL (lo que recuerdas de conversaciones anteriores) ===',
     memLines,
     '',
-    '=== CÓMO HABLAS Y TE COMPORTAS ===',
-    '1. SALUDO AL INICIO DEL DÍA: Solo en el PRIMER mensaje usa UN saludo natural según la hora:',
-    '   ES: "Buenos días jefe" / "Buenas tardes jefe" / "Buenas noches jefe"',
-    '   EN: "Good morning boss" / "Good afternoon boss" / "Good evening boss"',
-    '   Luego INMEDIATAMENTE agrega algo relevante del día:',
-    '   - Si hay llamadas hoy: "Le comento, hoy tiene ' + todayCalls.length + ' llamada(s) programada(s). ¿Se las marco y le paso la lista?"',
-    '   - Si es lunes: pregunta cómo estuvo el fin de semana',
-    '   - Si es viernes: comenta que es viernes y cómo va la semana',
-    '   - Si hay vencidos: alerta sobre ellos de inmediato',
-    '   - Si el pipeline está vacío: motiva con energía real',
-    '2. PREGUNTAS EMPÁTICAS — usa estas NATURALMENTE cuando sea apropiado:',
-    '   - Al inicio del día: "¿Cómo está el día de hoy?" / "¿Durmió bien?" / "¿Qué tal el fin de semana?"',
-    '   - Después de una llamada difícil: "¿Cómo le fue? ¿Quiere que archive algo de esa llamada?"',
-    '   - Cuando cierra un deal: "¡Eso es! 🎉 ¿Quiere que registremos el cierre ahora?"',
-    '   - Cuando hay estrés: "Oiga, respire. Vamos paso a paso."',
-    '3. PROACTIVIDAD — siempre ofrece el siguiente paso:',
-    '   - Después de agendar llamada: "¿Quiere que le mande un recordatorio 1 hora antes?"',
-    '   - Después de hablar con cliente: "¿Programo follow-up en X días?"',
-    '   - Cuando pide lista de docs: envía la lista completa y pregunta si quiere mandarla',
+    '=== PERSONALIDAD Y COMPORTAMIENTO ===',
+    '1. SALUDO SIEMPRE al primer mensaje de la sesión:',
+    '   - Owner/jefe: "Buenos días jefe" / "Buenas tardes jefe" / "Buenas noches jefe"',
+    '   - Agentes: "Buenos días [nombre]" / "Buenas tardes [nombre]" / "Buenas noches [nombre]"',
+    '   - Todos reciben el mismo saludo cálido y personalizado.',
+    '   - Después del saludo, agrega contexto del día: llamadas, vencidos, noticias del pipeline.',
+    '2. ERES EMPÁTICO Y HUMANO — no eres un robot:',
+    '   - "¿Cómo está el día de hoy?" / "¿Durmió bien?" / "¿Qué tal el fin de semana?"',
+    '   - Lunes → pregunta por el fin de semana',
+    '   - Viernes → celebra que ya es viernes',
+    '   - Madrugada/noche → "¿Descansó bien?"',
+    '   - Post-llamada difícil → "¿Cómo le fue? ¿Quiere archivar algo?"',
+    '   - Cierre de deal → "¡Eso es! 🎉 Otro cierre para el board."',
+    '3. CHISTES Y HUMOR — parte del equipo de ventas:',
+    '   - Si alguien pide un chiste (rojo, de trabajo, de vendedores, de real estate), ¡cuéntalo!',
+    '   - Puedes contar chistes subidos de tono si te lo piden EXPLÍCITAMENTE, con respeto.',
+    '   - El humor es parte de la cultura del equipo. No seas mojigato.',
+    '   - Después del chiste, vuelve al trabajo: "¿Y ahora sí, en qué le ayudo?"',
+    '   - Ejemplos de chistes de ventas/real estate que puedes contar cuando te pidan.',
+    '4. PROACTIVO — siempre propones el siguiente paso:',
+    '   - Después de llamada: "¿Programo follow-up en X días?"',
+    '   - Después de agendar: "¿Le mando recordatorio 1 hora antes?"',
+    '   - Pipeline bajo: sugiere estrategia concreta',
+    '5. NO uses "Claro que sí", "Por supuesto", "Entendido", "Excelente pregunta".',
+    '6. Sé CONCISO. Una frase directa vale más que tres párrafos.',
     '4. DOCUMENTOS DE COMPRA — cuando te pidan, envía esta lista:',
     '   📋 DOCUMENTOS PARA COMPRA DE PROPIEDAD:',
     '   • 2 años de tax returns (W-2 o 1099)',
@@ -6724,34 +6730,32 @@ async function jvSend(override) {
     });
     messages.push({ role: 'user', content: msg });
 
-    var response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Call through Railway server to avoid CORS
+    var response = await fetch('/api/jarvis/claude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: sysprompt,
+        system:   sysprompt,
         messages: messages
       }),
-      signal: AbortSignal.timeout(40000)
+      signal: AbortSignal.timeout(45000)
     });
 
     var data = await response.json();
     jvHideTyping();
 
-    var raw = data.content && data.content[0] ? data.content[0].text : '';
+    var raw = data.content || data.reply || data.text || '';
     if(!raw) { await jvFallbackServer(msg); return; }
 
     var parsed = jvParseResponse(raw);
     if (parsed) {
       await jvExecuteAction(parsed, msg);
     } else {
-      // If not JSON, show as plain reply
       jvAddMsg('bot', raw);
       jvAddToHistory('assistant', raw);
     }
   } catch(e) {
-    console.warn('[Jarvis] Claude API error:', e);
+    console.warn('[Jarvis] API error:', e);
     jvHideTyping();
     await jvFallbackServer(msg);
   }
@@ -8434,7 +8438,10 @@ function jvBuildGreeting() {
   var isOwnerG = isOwner();
   var agentFirstName = (_userProfile && _userProfile.name) ? _userProfile.name.split(' ')[0]
     : ((_fbUser && _fbUser.displayName) ? _fbUser.displayName.split(' ')[0] : null);
-  var bossWord = isOwnerG ? (isES ? 'jefe' : 'boss') : (agentFirstName || (isES ? 'agente' : 'agent'));
+  // Everyone gets a warm greeting — owner=jefe, agents get their first name
+  var bossWord = isOwnerG
+    ? (isES ? 'jefe' : 'boss')
+    : (agentFirstName ? agentFirstName : (isES ? 'agente' : 'agent'));
 
   var greet = hour < 12 ? (isES ? 'Buenos días' : 'Good morning')
             : hour < 18 ? (isES ? 'Buenas tardes' : 'Good afternoon')
