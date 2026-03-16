@@ -858,9 +858,9 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query as fbQuery, where as fbWhere, orderBy as fbOrderBy, limit as fbLimit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    window._firebase = { initializeApp, getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query: fbQuery, where: fbWhere, orderBy: fbOrderBy, limit: fbLimit, getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile };
+    window._firebase = { initializeApp, getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query, where, orderBy, limit, getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile };
   </script>
 </head>
 <body>
@@ -6377,12 +6377,13 @@ function jvRenderMem() {
     var key = entry[0], val = entry[1];
     var d = document.createElement('div');
     d.className = 'jv-mem-chip';
+    d.dataset.mkey = key;
     d.innerHTML = '<span style="line-height:1.4"><strong style="color:var(--gold)">' + key + ':</strong> ' + val + '</span>' +
-      '<button class="jv-mem-del" onclick="jvDelFireMem('' + key.replace(/'/g,"\'") + '')" title="Borrar">✕</button>';
+      '<button class="jv-mem-del" title="Borrar">✕</button>';
+    d.querySelector('.jv-mem-del').addEventListener('click', function(){ jvDelFireMem(key); });
     el.appendChild(d);
   });
 }
-
 // ── Add memory manually from UI ──
 async function jvAddMem() {
   var inp = document.getElementById('jvNewMem');
