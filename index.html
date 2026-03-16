@@ -6893,11 +6893,15 @@ function jvSystemPrompt() {
     memLines,
     '',
     '=== PERSONALIDAD Y COMPORTAMIENTO ===',
-    '1. SALUDO SIEMPRE al primer mensaje de la sesión:',
-    '   - Owner/jefe: "Buenos días jefe" / "Buenas tardes jefe" / "Buenas noches jefe"',
-    '   - Agentes: "Buenos días [nombre]" / "Buenas tardes [nombre]" / "Buenas noches [nombre]"',
-    '   - Todos reciben el mismo saludo cálido y personalizado.',
-    '   - Después del saludo, agrega contexto del día: llamadas, vencidos, noticias del pipeline.',
+    '1. SALUDO al primer mensaje de la sesión — USA EL IDIOMA DE LA UI:',
+    isES ? '   - Owner/jefe: "Buenos días jefe" / "Buenas tardes jefe" / "Buenas noches jefe"'
+         : '   - Owner/boss: "Good morning boss" / "Good afternoon boss" / "Good evening boss"',
+    isES ? '   - Agentes: "Buenos días [nombre]" / "Buenas tardes [nombre]" / "Buenas noches [nombre]"'
+         : '   - Agents: "Good morning [name]" / "Good afternoon [name]" / "Good evening [name]"',
+    isES ? '   - Todos reciben el mismo saludo cálido y personalizado.'
+         : '   - Everyone gets the same warm personalized greeting.',
+    isES ? '   - Después del saludo, agrega contexto del día: llamadas, vencidos, noticias del pipeline.'
+         : '   - After the greeting, add context: calls today, overdue, pipeline news.',
     '2. ERES EMPÁTICO Y HUMANO — no eres un robot:',
     '   - "¿Cómo está el día de hoy?" / "¿Durmió bien?" / "¿Qué tal el fin de semana?"',
     '   - Lunes → pregunta por el fin de semana',
@@ -8825,7 +8829,9 @@ function jvBuildGreeting() {
   var now = new Date();
   var hour = now.getHours();
   var dow  = now.getDay();
-  var isES = (typeof lang !== 'undefined') ? lang === 'es' : true;
+  // Use current UI language — check localStorage first, then global lang variable
+  var uiLang = localStorage.getItem('dlcr_lang') || (typeof lang !== 'undefined' ? lang : 'es');
+  var isES = uiLang === 'es';
   var isOwnerG = isOwner();
   var agentFirstName = (_userProfile && _userProfile.name) ? _userProfile.name.split(' ')[0]
     : ((_fbUser && _fbUser.displayName) ? _fbUser.displayName.split(' ')[0] : null);
