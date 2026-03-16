@@ -6542,6 +6542,25 @@ function jvSystemPrompt() {
              .slice(0,5).map(function(c){ return c.name + (c.nextCall ? ' (vencida: '+c.nextCall+')' : ''); })
     : [];
 
+  // Full client list for Jarvis to reference
+  var clientList = (typeof clients !== 'undefined' && clients.length > 0)
+    ? clients.slice(0,20).map(function(c){
+        return '• ' + c.name +
+          ' [' + (c.type||'?') + '][' + (c.temp||'cold') + '][' + (c.stage||'lead') + ']' +
+          (c.phone ? ' ☎'+c.phone : '') +
+          (c.nextCall ? ' 📅'+c.nextCall : '') +
+          (c.amount ? ' $'+Number(c.amount).toLocaleString() : '') +
+          (c.notes ? ' | '+c.notes.slice(0,50) : '');
+      }).join('\n')
+    : 'Sin clientes registrados aún.';
+
+  var incomeSummary = (typeof incomeTxs !== 'undefined' && incomeTxs.length > 0)
+    ? incomeTxs.slice(0,10).map(function(t){
+        return '• ' + (t.client||t.clientName||'?') + ' $' + (t.amount||0).toLocaleString() +
+          ' [' + (t.category||'?') + '] ' + (t.date||'');
+      }).join('\n')
+    : 'Sin ingresos registrados.';
+
   // Agent info
   var agentName    = (_userProfile && _userProfile.name) ? _userProfile.name.split(' ')[0] : ((_fbUser && _fbUser.displayName) ? _fbUser.displayName.split(' ')[0] : 'Jefe');
   var agentRole    = (_userProfile && _userProfile.role) ? _userProfile.role : 'agent';
@@ -6606,7 +6625,8 @@ function jvSystemPrompt() {
     '- Próximo sábado: ' + satISO,
     '- Situación del día: ' + (situation || 'Día normal de trabajo.'),
     '',
-    '=== CRM EN TIEMPO REAL ===',
+    '=== TUS DATOS REALES DEL CRM AHORA MISMO ===',
+    '(Este es tu CRM real — puedes responder preguntas sobre estos datos)',
     '- Total clientes: ' + totalClients,
     '- 🔥 Calientes: ' + hotClients + ' | 🌡️ Tibios: ' + warmClients + ' | ❄️ Fríos: ' + coldClients,
     '- ✅ Cerrados: ' + closedClients + ' | ⚠️ Vencidos: ' + overdueC,
@@ -6614,6 +6634,12 @@ function jvSystemPrompt() {
     '- 📞 Llamadas HOY (' + todayCalls.length + '): ' + (todayCalls.join(' | ') || 'ninguna'),
     '- 📅 Llamadas MAÑANA: ' + (tomorrowCalls.join(', ') || 'ninguna'),
     '- 🚨 Urgentes/vencidos: ' + (urgentClients.join(' | ') || 'ninguno'),
+    '',
+    '=== LISTA DETALLADA DE CLIENTES (datos reales del CRM) ===',
+    clientList,
+    '',
+    '=== INGRESOS RECIENTES ===',
+    incomeSummary,
     '',
     '=== MEMORIA PERSONAL (lo que recuerdas de conversaciones anteriores) ===',
     memLines,
@@ -6716,17 +6742,21 @@ async function jvSend(override) {
   if (inp) { inp.value = ''; inp.style.height = 'auto'; }
 
   jvAddMsg('user', msg);
+  jvAddToHistory('user', msg);  // track user message in history
   jvShowTyping();
 
-  // Call Claude API directly — same intelligence as Claude AI
+  // Call Claude API through Railway (same intelligence as Claude AI)
   try {
     var sysprompt = jvSystemPrompt();
 
-    // Build messages array with history
+    // Build messages array with full conversation history
     var messages = [];
-    var hist = _jvHistory.slice(0, -1);
+    var hist = _jvHistory.slice(0, -1); // exclude last (current) message
     hist.forEach(function(h) {
-      messages.push({ role: h.role === 'bot' ? 'assistant' : h.role, content: h.content });
+      messages.push({
+        role:    h.role === 'bot' ? 'assistant' : 'user',
+        content: h.content
+      });
     });
     messages.push({ role: 'user', content: msg });
 
@@ -6749,6 +6779,8 @@ async function jvSend(override) {
 
     var parsed = jvParseResponse(raw);
     if (parsed) {
+      // Track reply in history before executing action
+      if(parsed.reply) jvAddToHistory('assistant', parsed.reply);
       await jvExecuteAction(parsed, msg);
     } else {
       jvAddMsg('bot', raw);
