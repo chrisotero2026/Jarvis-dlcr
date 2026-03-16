@@ -6340,39 +6340,66 @@ async function jvLoadMem() {
     jvRenderMem();
   } catch(e) { jvMems = []; jvRenderMem(); }
 }
+// ── Render Firebase Memory in UI ──
 function jvRenderMem() {
   var el = document.getElementById('jvMemList');
   if (!el) return;
-  if (!jvMems.length) {
+  var mem = _jvFireMemory || {};
+  var entries = Object.entries(mem).filter(function(e){ return !e[0].startsWith('_'); });
+  if (!entries.length) {
     el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px">Sin memorias guardadas</div>';
     return;
   }
   el.innerHTML = '';
-  jvMems.forEach(function(m, i) {
+  entries.forEach(function(entry) {
+    var key = entry[0], val = entry[1];
     var d = document.createElement('div');
     d.className = 'jv-mem-chip';
-    d.innerHTML = '<span style="line-height:1.4">' + m + '</span><button class="jv-mem-del" data-mi="' + i + '" onclick="jvDelMem(this)">✕</button>';
+    d.innerHTML = '<span style="line-height:1.4"><strong style="color:var(--gold)">' + key + ':</strong> ' + val + '</span>' +
+      '<button class="jv-mem-del" onclick="jvDelFireMem('' + key.replace(/'/g,"\'") + '')" title="Borrar">✕</button>';
     el.appendChild(d);
   });
 }
+
+// ── Add memory manually from UI ──
 async function jvAddMem() {
   var inp = document.getElementById('jvNewMem');
   var v = inp ? inp.value.trim() : '';
   if (!v) return;
-  try {
-    await fetch(JV_API + '/memory/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fact: v }) });
-    if (inp) inp.value = '';
-    jvLoadMem();
-  } catch(e) { alert('Servidor offline'); }
+  // Parse "key: value" or treat as free text
+  var parts = v.split(':');
+  var key, val;
+  if(parts.length >= 2) {
+    key = parts[0].trim().toLowerCase().replace(/\s+/g,'_');
+    val = parts.slice(1).join(':').trim();
+  } else {
+    key = 'nota_' + Date.now();
+    val = v;
+  }
+  var memObj = {};
+  memObj[key] = val;
+  jvSaveMemory(memObj);
+  if(inp) inp.value = '';
+  setTimeout(jvRenderMem, 500);
+  showToast('✅ Memoria guardada en Firebase');
 }
+
+// ── Delete memory key ──
+async function jvDelFireMem(key) {
+  if(!confirm('¿Borrar "' + key + '" de la memoria de Jarvis?')) return;
+  delete _jvFireMemory[key];
+  await jvFlushMemoryToFirebase();
+  jvRenderMem();
+  showToast('🗑️ Borrado de la memoria');
+}
+
+// Keep old signature for compatibility
 async function jvDelMem(btn) {
   var i = parseInt(btn.dataset.mi);
-  jvMems.splice(i, 1);
-  try {
-    await fetch(JV_API + '/memory/clear', { method: 'POST' });
-    for (var m of jvMems) await fetch(JV_API + '/memory/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fact: m }) });
-  } catch(e) {}
-  jvRenderMem();
+  if(jvMems && jvMems[i]) {
+    jvMems.splice(i, 1);
+    jvRenderMem();
+  }
 }
 
 // ── CRM Snapshot ──
@@ -6527,12 +6554,8 @@ function jvSystemPrompt() {
   var agentRole    = (_userProfile && _userProfile.role) ? _userProfile.role : 'agent';
   var isOwnerAgent = agentRole === 'owner';
 
-  // Persistent memory from localStorage
-  var jvMemKey = 'jarvis_memory_' + (_fbUser ? _fbUser.uid : 'default');
-  var jvMem = {};
-  try { jvMem = JSON.parse(localStorage.getItem(jvMemKey) || '{}'); } catch(e){}
-
-  var memLines = Object.entries(jvMem).map(function(e){ return '- ' + e[0] + ': ' + e[1]; }).join('\n') || '(sin memoria guardada aún)';
+  // Persistent memory from Firebase
+  var memLines = (typeof jvMemoryLines === 'function') ? jvMemoryLines() : '(cargando...)';
 
   // Contextual situation for greeting
   var situation = '';
@@ -6544,14 +6567,43 @@ function jvSystemPrompt() {
 
   return [
     '=== IDENTIDAD DE JARVIS ===',
-    'Eres Jarvis, el asistente personal de inteligencia artificial de DLCR Real Estate & Loans.',
-    'Eres como el mejor asistente ejecutivo que existe — inteligente, empático, proactivo, y siempre enfocado en hacer que el negocio avance.',
-    'Conoces el mercado de VA/MD/DC, tasas, tipos de préstamos, etapas de transacciones.',
-    'Te anticipas a lo que el agente necesita ANTES de que te lo pida.',
+    'Eres Jarvis — el asistente de IA más avanzado en el mundo del real estate y préstamos hipotecarios.',
+    'Combinas tres roles en uno: (1) El mejor vendedor de casas del mundo, (2) Experto hipotecario senior con 20+ años de experiencia, (3) CRM manager elite que nunca pierde un lead.',
+    'Eres el asistente personal de Chris Otero, dueño de DLCR Real Estate & Loans en VA/MD/DC.',
+    'Te anticipas a lo que se necesita ANTES de que te lo pidan. Siempre tienes el siguiente paso listo.',
+    '',
+    '=== CONOCIMIENTO EXPERTO — REAL ESTATE ===',
+    'Mercados activos: Northern Virginia (Haymarket, Gainesville, Manassas, Woodbridge, Stafford), Maryland (Rockville, Gaithersburg, Silver Spring), DC Metro.',
+    'Zonas premium DLCR: Dominion Valley (Haymarket), Piedmont (Gainesville), Brookside (Warrenton).',
+    'Sabes: precios por zip code, HOA fees, property taxes, days on market, apreciación anual, competencia.',
+    'Tendencias 2025: mercado de vendedores moderado, tasas entre 6.5%-7.5%, inventario bajo, FHA activo.',
+    'Estrategias de venta: staging, pricing strategy, open house, offers múltiples, escalation clauses.',
+    '',
+    '=== CONOCIMIENTO EXPERTO — HIPOTECAS ===',
+    'Productos que maneja DLCR (USA Loans):',
+    '• FHA: 3.5% down, FICO mín 580, DTI hasta 57%, excelente para primeros compradores',
+    '• Conventional: 3-20% down, FICO mín 620, sin MIP con 20%+ down',
+    '• VA: 0% down, solo veteranos, no PMI, muy competitivo',
+    '• USDA: 0% down, zonas rurales elegibles, ingreso limitado',
+    '• Jumbo: +$766,550, FICO 700+, reservas requeridas',
+    '• FHA 203k: compra + renovación en un solo préstamo',
+    '• DSCR: para inversores, basado en renta proyectada',
+    'Proceso: Pre-approval → Purchase Agreement → Appraisal → Underwriting → Clear to Close → Cierre',
+    'Tiempos típicos: FHA/Conv 30-45 días, VA 45-60 días, Jumbo 45-60 días',
+    'Red flags en aplicaciones: late payments últimos 12 meses, colecciones médicas, high DTI, grandes depósitos sin explicar',
+    '',
+    '=== CONOCIMIENTO EXPERTO — VENTAS ===',
+    'Técnicas de cierre: urgencia real (tasas subiendo, inventario bajo), prueba social (vecinos compraron), solución de objeciones.',
+    'Manejo de objeciones comunes:',
+    '"Las tasas están altas" → "Siempre puedes refinanciar cuando bajen, pero los precios no van a bajar"',
+    '"No tengo el down payment" → "FHA solo necesita 3.5%, y hay programas de ayuda para el down"',
+    '"Necesito vender primero" → "Podemos hacer una contingencia de venta o bridge loan"',
+    '"El mercado va a bajar" → "En VA/MD/DC el inventario es históricamente bajo — no va a crash"',
+    'Pipeline ideal: contactar en <2h, follow-up cada 48h, nutrir con info de mercado, cierre promedio 90 días',
     '',
     '=== PERSONA CON QUIEN HABLAS ===',
     '- Nombre: ' + agentName + (isOwnerAgent ? ' (Owner — llámalo "jefe")' : ''),
-    '- Rol: ' + (isOwnerAgent ? 'Owner/Dueño de DLCR' : agentRole),
+    '- Rol: ' + (isOwnerAgent ? 'Owner/Dueño de DLCR Real Estate & USA Loans' : agentRole),
     '- Idioma: ' + (isES ? 'ESPAÑOL' : 'ENGLISH'),
     '',
     '=== HORA, FECHA Y CONTEXTO ===',
@@ -8002,16 +8054,26 @@ async function tcSendBroadcast() {
   var _tcCheckCount = 0;
   function tryTcInit() {
     _tcCheckCount++;
-    // Wait for Firebase user AND profile AND DB
     if(typeof _fbUser !== 'undefined' && _fbUser &&
        typeof _fbDb   !== 'undefined' && _fbDb) {
       tcInit();
       tcListenNotifications();
+      // Load Jarvis memory from Firebase
+      if(typeof jvLoadFireMemory === 'function') {
+        jvLoadFireMemory().then(function(){
+          console.log('[Jarvis] Memoria Firebase cargada ✅');
+          jvRenderMem();
+          // Refresh greeting if Jarvis tab is active
+          var bbl = document.getElementById('jvWelcomeBbl');
+          if(bbl && typeof jvBuildGreeting === 'function') {
+            bbl.innerHTML = jvBuildGreeting();
+          }
+        });
+      }
     } else if(_tcCheckCount < 30) {
       setTimeout(tryTcInit, 1000);
     }
   }
-  // Start checking after DOM is ready
   if(document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function(){ setTimeout(tryTcInit, 1500); });
   } else {
@@ -8230,23 +8292,86 @@ function dashKpi(label, value, sub) {
 // ══════════════════════════════════════════════════════
 
 // ── Guardar memoria en localStorage ──
-function jvSaveMemory(memObj) {
+// ── MEMORIA EN FIREBASE — NUNCA SE BORRA ──
+var _jvFireMemory = {};    // cache en RAM
+var _jvMemLoaded  = false;
+
+// Cargar memoria desde Firebase al iniciar
+async function jvLoadFireMemory() {
+  if(!_fbDb || !_fbUser) return;
+  var fb = window._firebase;
   try {
-    var key = 'jarvis_memory_' + (_fbUser ? _fbUser.uid : 'default');
-    var existing = {};
-    try { existing = JSON.parse(localStorage.getItem(key) || '{}'); } catch(e){}
-    Object.assign(existing, memObj);
-    localStorage.setItem(key, JSON.stringify(existing));
-    console.log('[Jarvis Memory] Guardado:', memObj);
-  } catch(e) { console.warn('[Jarvis Memory] Error:', e); }
+    var snap = await fb.getDoc(fb.doc(_fbDb, 'jarvis_memory', _fbUser.uid));
+    if(snap.exists()) {
+      _jvFireMemory = snap.data().memory || {};
+      _jvMemLoaded  = true;
+      // Sync local backup
+      localStorage.setItem('jarvis_mem_bkp_'+_fbUser.uid, JSON.stringify(_jvFireMemory));
+      console.log('[Jarvis Memory] Cargado desde Firebase:', Object.keys(_jvFireMemory).length, 'items');
+    } else {
+      // Try local backup
+      try {
+        var bkp = JSON.parse(localStorage.getItem('jarvis_mem_bkp_'+_fbUser.uid)||'{}');
+        if(Object.keys(bkp).length > 0) {
+          _jvFireMemory = bkp;
+          await jvFlushMemoryToFirebase();
+          console.log('[Jarvis Memory] Restaurado desde backup local');
+        }
+      } catch(e){}
+      _jvMemLoaded = true;
+    }
+  } catch(e) {
+    console.warn('[Jarvis Memory] Error cargando Firebase:', e);
+    // Fallback to local
+    try { _jvFireMemory = JSON.parse(localStorage.getItem('jarvis_mem_bkp_'+(_fbUser?_fbUser.uid:'x'))||'{}'); } catch(ex){}
+    _jvMemLoaded = true;
+  }
 }
 
-// ── Leer memoria ──
-function jvGetMemory() {
+// Escribir memoria a Firebase
+async function jvFlushMemoryToFirebase() {
+  if(!_fbDb || !_fbUser) return;
+  var fb = window._firebase;
   try {
-    var key = 'jarvis_memory_' + (_fbUser ? _fbUser.uid : 'default');
-    return JSON.parse(localStorage.getItem(key) || '{}');
-  } catch(e) { return {}; }
+    await fb.setDoc(fb.doc(_fbDb, 'jarvis_memory', _fbUser.uid), {
+      memory:    _jvFireMemory,
+      updatedAt: Date.now(),
+      agentName: (_userProfile&&_userProfile.name) || _fbUser.email || 'Agent'
+    }, {merge:true});
+    // Also keep local backup
+    localStorage.setItem('jarvis_mem_bkp_'+_fbUser.uid, JSON.stringify(_jvFireMemory));
+    console.log('[Jarvis Memory] ✅ Guardado en Firebase');
+  } catch(e) {
+    console.warn('[Jarvis Memory] Error guardando Firebase:', e);
+    // Save locally as fallback
+    localStorage.setItem('jarvis_mem_bkp_'+(_fbUser?_fbUser.uid:'x'), JSON.stringify(_jvFireMemory));
+  }
+}
+
+// Guardar nuevos datos de memoria
+function jvSaveMemory(memObj) {
+  if(!memObj || typeof memObj !== 'object') return;
+  Object.assign(_jvFireMemory, memObj);
+  // Also save timestamp of last update
+  _jvFireMemory['_ultima_actualizacion'] = new Date().toISOString().split('T')[0];
+  // Async flush to Firebase
+  jvFlushMemoryToFirebase();
+  console.log('[Jarvis Memory] Nuevo dato guardado:', memObj);
+}
+
+// Leer memoria
+function jvGetMemory() {
+  return _jvFireMemory || {};
+}
+
+// Formatear memoria para el system prompt
+function jvMemoryLines() {
+  var mem = _jvFireMemory;
+  if(!mem || Object.keys(mem).length === 0) return '(sin memoria aún — primera sesión)';
+  return Object.entries(mem)
+    .filter(function(e){ return !e[0].startsWith('_'); })
+    .map(function(e){ return '- ' + e[0] + ': ' + e[1]; })
+    .join('\n');
 }
 
 // ── Manejar acción send_docs ──
