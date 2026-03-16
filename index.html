@@ -858,9 +858,9 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query as fbQuery, where as fbWhere, orderBy as fbOrderBy, limit as fbLimit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    window._firebase = { initializeApp, getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query, where, orderBy, limit, getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile };
+    window._firebase = { initializeApp, getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query: fbQuery, where: fbWhere, orderBy: fbOrderBy, limit: fbLimit, getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile };
   </script>
 </head>
 <body>
@@ -8081,17 +8081,18 @@ async function tcSendBroadcast() {
       tcInit();
       tcListenNotifications();
       // Load Jarvis memory from Firebase
-      if(typeof jvLoadFireMemory === 'function') {
-        jvLoadFireMemory().then(function(){
-          console.log('[Jarvis] Memoria Firebase cargada ✅');
-          jvRenderMem();
-          // Refresh greeting if Jarvis tab is active
-          var bbl = document.getElementById('jvWelcomeBbl');
-          if(bbl && typeof jvBuildGreeting === 'function') {
-            bbl.innerHTML = jvBuildGreeting();
-          }
-        });
-      }
+      try {
+        if(typeof jvLoadFireMemory === 'function') {
+          jvLoadFireMemory().then(function(){
+            console.log('[Jarvis] Memoria Firebase cargada ✅');
+            if(typeof jvRenderMem === 'function') jvRenderMem();
+            var bbl = document.getElementById('jvWelcomeBbl');
+            if(bbl && typeof jvBuildGreeting === 'function') {
+              bbl.innerHTML = jvBuildGreeting();
+            }
+          }).catch(function(e){ console.warn('[Jarvis Memory] Load error:', e); });
+        }
+      } catch(e) { console.warn('[Jarvis Memory] Init error:', e); }
     } else if(_tcCheckCount < 30) {
       setTimeout(tryTcInit, 1000);
     }
