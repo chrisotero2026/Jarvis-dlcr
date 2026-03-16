@@ -858,9 +858,9 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-    window._firebase = { initializeApp, getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile };
+    window._firebase = { initializeApp, getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, addDoc, query, where, orderBy, limit, getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile };
   </script>
 </head>
 <body>
@@ -1499,6 +1499,9 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
                 <div class="jv-meta" id="jvInitTime"></div>
               </div>
             </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;padding:2px 0 4px 0">
+            <button onclick="jvClearChat()" title="Limpiar conversación" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;padding:2px 6px;border-radius:5px;opacity:.7" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.7">🗑️ Limpiar chat</button>
           </div>
           <div class="jv-input-row">
             <textarea class="jv-input" id="jvInput"
@@ -6262,6 +6265,25 @@ async function jvSend(override) {
       true
     );
   }
+}
+
+
+// ── Clear chat conversation (not memory) ──
+function jvClearChat() {
+  var c = document.getElementById('jvMsgs');
+  if(!c) return;
+  // Remove all messages except the welcome bubble
+  var welcome = c.querySelector('.jv-msg:first-child');
+  c.innerHTML = '';
+  if(welcome) c.appendChild(welcome);
+  // Reset history
+  _jvHistory = [];
+  // Refresh greeting
+  var bbl = document.getElementById('jvWelcomeBbl');
+  if(bbl && typeof jvBuildGreeting === 'function') {
+    bbl.innerHTML = jvBuildGreeting();
+  }
+  console.log('[Jarvis] Conversación limpiada');
 }
 
 function jvAddMsg(role, text, isErr) {
