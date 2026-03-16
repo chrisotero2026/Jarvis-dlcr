@@ -121,22 +121,38 @@ header { position:relative; }
 
 /* LAYOUT */
 .app{display:flex;height:calc(100vh - 106px);margin-right:270px;transition:margin-right .25s;}
-.sidebar{width:200px;background:var(--navy2);border-right:1px solid var(--border);padding:12px 0;flex-shrink:0;overflow-y:auto;}
-.nav-section{padding:6px 14px;margin-bottom:2px;}
-.nav-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;}
-.nav-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s;margin-bottom:2px;}
+.sidebar{width:220px;background:var(--navy2);border-right:1px solid var(--border);padding:8px 0 80px;flex-shrink:0;overflow-y:auto;display:flex;flex-direction:column;gap:2px;}
+.sidebar-section{padding:0 8px;margin-bottom:4px;}
+.sidebar-section-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);padding:8px 8px 4px;display:flex;align-items:center;justify-content:space-between;}
+.nav-section{padding:0 8px;margin-bottom:4px;}
+.nav-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px;padding:0 4px;}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .15s;margin-bottom:1px;}
 .nav-item:hover{background:var(--card);color:var(--text);}
 .nav-item.active{background:linear-gradient(135deg,rgba(240,165,0,.15),rgba(240,165,0,.05));color:var(--gold);border:1px solid rgba(240,165,0,.2);}
-.folder-item{font-size:12px;padding:6px 10px;border:1px solid transparent;}
+.nav-item .nav-count{margin-left:auto;font-size:11px;font-weight:800;background:var(--card2);padding:1px 7px;border-radius:10px;min-width:20px;text-align:center;}
+.folder-item{font-size:12px;padding:7px 10px;border:1px solid transparent;border-radius:8px;}
 .folder-item.active{background:rgba(168,85,247,.1);color:#a855f7;border-color:rgba(168,85,247,.25);}
 .folder-item:hover{background:rgba(168,85,247,.06);color:#c084fc;}
-.nav-icon{font-size:14px;width:18px;text-align:center;}
-.sidebar-stats{margin:12px;padding:12px;background:var(--card);border-radius:10px;border:1px solid var(--border);}
-.stat-row{display:flex;justify-content:space-between;margin-bottom:7px;align-items:center;}
+.nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;}
+.sidebar-divider{height:1px;background:var(--border);margin:6px 12px;}
+.sidebar-stats{margin:6px 8px;padding:10px 12px;background:var(--card);border-radius:10px;border:1px solid var(--border);}
+.stat-row{display:flex;justify-content:space-between;margin-bottom:6px;align-items:center;}
 .stat-row:last-child{margin-bottom:0;}
 .stat-label{font-size:12px;color:var(--muted);}
 .stat-val{font-size:13px;font-weight:700;}
 .hot{color:var(--red);}.warm{color:var(--orange);}.cold{color:var(--blue2);}
+/* Mobile bottom nav */
+.mobile-bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--navy2);border-top:1px solid var(--border);z-index:200;padding:6px 0 env(safe-area-inset-bottom,0);justify-content:space-around;align-items:center;}
+.mob-nav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 12px;border:none;background:transparent;color:var(--muted);font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;border-radius:8px;transition:.15s;min-width:52px;}
+.mob-nav-btn.active{color:var(--gold);}
+.mob-nav-btn .mob-icon{font-size:20px;line-height:1;}
+/* Mobile sidebar drawer */
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:149;backdrop-filter:blur(2px);}
+.sidebar-overlay.open{display:block;}
+.mob-filter-bar{display:none;padding:8px 12px;gap:6px;overflow-x:auto;border-bottom:1px solid var(--border);background:var(--navy2);scrollbar-width:none;}
+.mob-filter-bar::-webkit-scrollbar{display:none;}
+.mob-filter-chip{flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.mob-filter-chip.active{background:rgba(240,165,0,.15);color:var(--gold);border-color:rgba(240,165,0,.3);}
 
 /* MAIN */
 .main{flex:1;overflow:hidden;display:flex;flex-direction:column;}
@@ -427,10 +443,14 @@ tbody td{padding:12px 14px;vertical-align:middle;font-size:13px;}
   .tab span { display:none; }
 
   /* ── LAYOUT ── */
-  .app { height:calc(100vh - 90px); flex-direction:column; }
-  .sidebar { display:none; }
-  .detail-panel { width:100%; position:fixed; top:90px; right:0; bottom:0; z-index:50; }
-  .main { height:100%; }
+  .app { height:calc(100vh - 90px); flex-direction:column; margin-right:0 !important; }
+  .sidebar { position:fixed; top:0; left:-240px; width:240px; height:100vh; z-index:150; padding-top:16px; transition:left .25s; box-shadow:4px 0 20px rgba(0,0,0,.4); }
+  .sidebar.open { left:0; }
+  .detail-panel { width:100%; position:fixed; top:90px; right:0; bottom:60px; z-index:50; }
+  .main { height:100%; padding-bottom:60px; }
+  .mobile-bottom-nav { display:flex; }
+  .mob-filter-bar { display:flex; }
+  .topbar .flt-btn { display:none; }
 
   /* ── CLIENT LIST ── */
   .client-area { padding:10px 10px; }
@@ -941,25 +961,82 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
 
 <div class="app">
   <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <!-- CARPETAS (owner/manager only) -->
+  <!-- Mobile sidebar overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
+  <aside class="sidebar" id="mainSidebar">
+    <!-- EQUIPO (owner/manager only) -->
     <div id="folderSection" style="display:none">
-      <div class="nav-label" style="margin-top:4px" id="lbl-carpetas-wrap">👥 Mi Equipo</div>
+      <div class="sidebar-section-title" id="lbl-carpetas-wrap">
+        <span>👥 Mi Equipo</span>
+      </div>
       <div id="folderList"></div>
-      <div style="border-top:1px solid var(--border);margin:6px 12px"></div>
+      <div class="sidebar-divider"></div>
     </div>
+
     <!-- FILTROS POR TIPO -->
     <div class="nav-section">
       <div class="nav-label" id="lbl-filter">Filtrar</div>
-      <div class="nav-item active" id="nav-all" onclick="filterNav('',this)"><span class="nav-icon">📋</span><span id="lbl-all">Todos</span></div>
-      <div class="nav-item" onclick="filterNav('buy',this)"><span class="nav-icon">🏡</span><span id="lbl-buy">Compra</span></div>
-      <div class="nav-item" onclick="filterNav('refi',this)"><span class="nav-icon">🔄</span>Refinance</div>
-      <div class="nav-item" onclick="filterNav('sell',this)"><span class="nav-icon">💰</span><span id="lbl-sell">Venta</span></div>
-      <div class="nav-item" onclick="filterNav('buysell',this)"><span class="nav-icon">🔁</span><span id="lbl-buysell">Venta/Compra</span></div>
-      <div class="nav-item" onclick="filterNav('loan',this)"><span class="nav-icon">🏦</span><span id="lbl-loan">Préstamo</span></div>
+      <div class="nav-item active" id="nav-all" onclick="filterNav('',this);closeMobileSidebar()">
+        <span class="nav-icon">📋</span><span id="lbl-all">Todos</span>
+        <span class="nav-count" id="cnt-all">0</span>
+      </div>
+      <div class="nav-item" onclick="filterNav('buy',this);closeMobileSidebar()">
+        <span class="nav-icon">🏡</span><span id="lbl-buy">Compra</span>
+        <span class="nav-count" id="cnt-buy">0</span>
+      </div>
+      <div class="nav-item" onclick="filterNav('refi',this);closeMobileSidebar()">
+        <span class="nav-icon">🔄</span><span>Refinance</span>
+        <span class="nav-count" id="cnt-refi">0</span>
+      </div>
+      <div class="nav-item" onclick="filterNav('sell',this);closeMobileSidebar()">
+        <span class="nav-icon">💰</span><span id="lbl-sell">Venta</span>
+        <span class="nav-count" id="cnt-sell">0</span>
+      </div>
+      <div class="nav-item" onclick="filterNav('buysell',this);closeMobileSidebar()">
+        <span class="nav-icon">🔁</span><span id="lbl-buysell">Venta/Compra</span>
+        <span class="nav-count" id="cnt-buysell">0</span>
+      </div>
+      <div class="nav-item" onclick="filterNav('loan',this);closeMobileSidebar()">
+        <span class="nav-icon">🏦</span><span id="lbl-loan">Préstamo</span>
+        <span class="nav-count" id="cnt-loan">0</span>
+      </div>
     </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- STATS -->
     <div class="sidebar-stats" id="sidebarStats"></div>
   </aside>
+
+  <!-- Mobile filter chips (shows below topbar on mobile) -->
+  <div class="mob-filter-bar" id="mobFilterBar">
+    <button class="mob-filter-chip active" onclick="filterNav('',this);updateMobFilter(this)">📋 Todos</button>
+    <button class="mob-filter-chip" onclick="filterNav('buy',this);updateMobFilter(this)">🏡 Compra</button>
+    <button class="mob-filter-chip" onclick="filterNav('refi',this);updateMobFilter(this)">🔄 Refi</button>
+    <button class="mob-filter-chip" onclick="filterNav('sell',this);updateMobFilter(this)">💰 Venta</button>
+    <button class="mob-filter-chip" onclick="filterNav('buysell',this);updateMobFilter(this)">🔁 V/C</button>
+    <button class="mob-filter-chip" onclick="filterNav('loan',this);updateMobFilter(this)">🏦 Loan</button>
+  </div>
+
+  <!-- Mobile Bottom Navigation -->
+  <nav class="mobile-bottom-nav" id="mobileBottomNav">
+    <button class="mob-nav-btn active" onclick="switchTab('clients');setMobNav(this)">
+      <span class="mob-icon">👥</span><span>Clientes</span>
+    </button>
+    <button class="mob-nav-btn" onclick="switchTab('pipeline');setMobNav(this)">
+      <span class="mob-icon">📊</span><span>Pipeline</span>
+    </button>
+    <button class="mob-nav-btn" onclick="switchTab('calendar');setMobNav(this)">
+      <span class="mob-icon">📅</span><span>Calendario</span>
+    </button>
+    <button class="mob-nav-btn" onclick="switchTab('jarvis');setMobNav(this)">
+      <span class="mob-icon">🤖</span><span>Jarvis</span>
+    </button>
+    <button class="mob-nav-btn" onclick="openMobileSidebar()">
+      <span class="mob-icon">☰</span><span>Más</span>
+    </button>
+  </nav>
 
   <!-- MAIN -->
   <main class="main">
@@ -2332,7 +2409,7 @@ function setFolder(uid) {
   renderClients();
 }
 
-function renderClients(){
+function renderClients(){ updateNavCounts();
   const grid=document.getElementById('clientCards');
   const q=document.getElementById('searchInput').value.toLowerCase();
   const today=new Date(); today.setHours(0,0,0,0);
