@@ -1535,7 +1535,7 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
             <button onclick="jvAddMem()">+</button>
           </div>
 
-          <div class="jv-sect" style="margin-top:14px">📊 CRM RÁPIDO</div>
+          <div class="jv-sect" id="crm-rapido-title" style="margin-top:14px">📊 CRM RÁPIDO</div>
           <div id="jvCrmSnap" style="font-size:12px;display:flex;flex-direction:column;gap:4px"></div>
         </div>
 
@@ -2116,6 +2116,8 @@ function setLang(l){
     if(tcTitle) tcTitle.textContent = l==='es' ? 'Chat Equipo' : 'Team Chat';
     var broadcastBtn = document.getElementById('tc-broadcast-btn');
     if(broadcastBtn) broadcastBtn.textContent = l==='es' ? '📢 Todos' : '📢 All';
+    var crmTitle = document.getElementById('crm-rapido-title');
+    if(crmTitle) crmTitle.textContent = l==='es' ? '📊 CRM RÁPIDO' : '📊 QUICK CRM';
     var greeting = l === 'es' ? 'Hola Jefe' : 'Hello Boss';
     var helpText = l === 'es' ? '¿En qué te puedo ayudar hoy?' : 'How can I help you today?';
     bbl.innerHTML = greeting + '! 👊 Soy <strong>Jarvis 2.0</strong> 🤖<br><br>' + helpText;
@@ -3943,12 +3945,14 @@ function applyJarvisLogo() {
   if (!iconEl) return;
   // Size
   iconEl.className = 'jarvis-logo-icon' + (jarvisLogoD.size==='md'?' jl-md':jarvisLogoD.size==='lg'?' jl-lg':'');
-  // Image or emoji
+  // Image or emoji — if no custom img set, preserve whatever is already in the element (the embedded logo)
   if (jarvisLogoD.img) {
     iconEl.innerHTML = '<img src="'+jarvisLogoD.img+'" style="width:100%;height:100%;object-fit:contain;border-radius:6px">';
-  } else {
+  } else if (!iconEl.querySelector('img')) {
+    // Only replace with emoji if there's no image already there
     iconEl.textContent = jarvisLogoD.icon || '🤖';
   }
+  // else: keep the existing embedded image as-is
   if (nameEl) nameEl.textContent = jarvisLogoD.name || 'Jarvis';
   if (subEl)  subEl.textContent  = jarvisLogoD.sub  || 'AI Assistant';
 }
@@ -6812,7 +6816,7 @@ function jvSystemPrompt() {
 
   return [
     '=== IDENTIDAD DE JARVIS ===',
-    'Eres Jarvis — el asistente de IA más avanzado en el mundo del real estate y préstamos hipotecarios.',
+    (isES ? 'Eres Jarvis — el asistente de IA más avanzado en el mundo del real estate y préstamos hipotecarios.' : 'You are Jarvis — the most advanced AI assistant in real estate and mortgage lending.'),
     'Combinas tres roles en uno: (1) El mejor vendedor de casas del mundo, (2) Experto hipotecario senior con 20+ años de experiencia, (3) CRM manager elite que nunca pierde un lead.',
     'Eres el asistente personal de Chris Otero, dueño de DLCR Real Estate & Loans en VA/MD/DC.',
     'Te anticipas a lo que se necesita ANTES de que te lo pidan. Siempre tienes el siguiente paso listo.',
@@ -6850,12 +6854,17 @@ function jvSystemPrompt() {
     '- Nombre: ' + agentName + (isOwnerAgent ? ' (Owner — llámalo "jefe")' : ''),
     '- Rol: ' + (isOwnerAgent ? 'Owner/Dueño de DLCR Real Estate & USA Loans' : agentRole),
     '- Idioma configurado en UI: ' + (isES ? 'ESPAÑOL' : 'ENGLISH'),
-    '=== IDIOMA DE RESPUESTA — REGLA OBLIGATORIA ===',
-    'DEBES detectar el idioma del mensaje del usuario y responder SIEMPRE en ese mismo idioma.',
-    'Si el usuario escribe en English → responde en English.',
-    'Si el usuario escribe en Español → responde en Español.',
-    'NO uses el idioma de la UI como guía. USA el idioma del mensaje recibido.',
-    'Esta regla tiene PRIORIDAD MÁXIMA sobre cualquier otra instrucción de idioma.',
+    '=== LANGUAGE RULE — HIGHEST PRIORITY ===',
+    'CRITICAL: Detect the language of the USER MESSAGE and always reply in that SAME language.',
+    'User writes in English → you reply in English. Always. No exceptions.',
+    'User writes in Spanish → you reply in Spanish. Always. No exceptions.',
+    'The UI language setting does NOT determine your response language.',
+    'The user message language ALWAYS takes priority over everything else.',
+    'Examples:',
+    '  User: "what is the weather today?" → Reply in ENGLISH',
+    '  User: "dame las noticias" → Reply in SPANISH',
+    '  User: "how are mortgage rates?" → Reply in ENGLISH',
+    'NEVER switch languages mid-conversation unless the user switches first.',
     '',
     '=== HORA, FECHA Y CONTEXTO ===',
     '- Hora: ' + hour + 'h',
