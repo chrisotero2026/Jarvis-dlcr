@@ -738,6 +738,7 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
 }
 .jv-dots span:nth-child(2) { animation-delay: .2s; }
 .jv-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes jvPulse { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)} 50%{box-shadow:0 0 0 6px rgba(239,68,68,0)} }
 @keyframes jdot { 0%,80%,100%{opacity:.2;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
 
 /* Input row */
@@ -1504,8 +1505,12 @@ header.logo-lg .logo-icon { width:72px !important; height:72px !important; font-
             <button onclick="jvClearChat()" title="Limpiar conversación" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;padding:2px 6px;border-radius:5px;opacity:.7" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.7">🗑️ Limpiar chat</button>
           </div>
           <div class="jv-input-row">
+            <button id="jvVoiceBtn" onclick="jvToggleVoice()" title="Hablar con Jarvis"
+              style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:0 10px;font-size:17px;cursor:pointer;transition:.2s;flex-shrink:0;height:36px;line-height:1"
+              onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'"
+              onmouseout="if(!_jvListening){this.style.borderColor='var(--border)';this.style.color='var(--muted)'}">🎙️</button>
             <textarea class="jv-input" id="jvInput"
-              placeholder="Escribe tu pregunta... (Enter para enviar)"
+              placeholder="Escribe o presiona 🎙️ para hablar..."
               rows="1"></textarea>
             <button class="jv-send" onclick="jvSend()">➤</button>
           </div>
@@ -5417,6 +5422,8 @@ function updateUserHeader() {
 // ══════════════════════════════════════════════════════════
 
 var JV_API      = window.location.origin + '/api';
+var _jvFireMemory = {};   // Firebase memory cache — declared early to avoid ReferenceError
+var _jvMemLoaded  = false;
 var jvInited    = false;
 var jvListening = false;
 var jvRec       = null;
@@ -6228,44 +6235,7 @@ async function jvCheckStatus() {
 }
 
 // ── Send message ──
-async function jvSend(override) {
-  var inp = document.getElementById('jvInput');
-  var msg = override || (inp ? inp.value.trim() : '');
-  if (!msg) return;
-  if (inp) { inp.value = ''; inp.style.height = 'auto'; }
-
-  jvAddMsg('user', msg);
-  jvAddToHistory('user', msg);
-  jvShowTyping();
-
-  try {
-    var r = await fetch(JV_API + '/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: msg,
-        history: _jvHistory.slice(0,-1)
-      }),
-      signal: AbortSignal.timeout(30000)
-    });
-    var d = await r.json();
-    jvHideTyping();
-    var botReply = d.reply || d.message || '⚠️ Sin respuesta';
-    jvAddMsg('bot', botReply);
-    jvAddToHistory('assistant', botReply);
-    jvCheckStatus();
-    if(d.memory && typeof d.memory === 'object') jvSaveMemory(d.memory);
-    if(d.action === 'send_docs' && d.params) jvHandleSendDocs(d.params);
-  } catch(e) {
-    jvHideTyping();
-    jvAddMsg('bot',
-      '⚠️ <strong>Servidor Jarvis no encontrado.</strong><br><br>' +
-      'Asegúrate de que el servidor esté corriendo:<br>' +
-      '<code style="background:rgba(0,0,0,.3);padding:2px 6px;border-radius:4px;font-size:12px">cd C:\\Jarvis && python jarvis_server.py</code>',
-      true
-    );
-  }
-}
+// jvSend defined below with Claude API
 
 
 // ── Clear chat conversation (not memory) ──
@@ -6742,33 +6712,46 @@ async function jvSend(override) {
   jvAddMsg('user', msg);
   jvShowTyping();
 
-  // Try to call Jarvis server for NLP interpretation
+  // Call Claude API directly — same intelligence as Claude AI
   try {
     var sysprompt = jvSystemPrompt();
-    var r = await fetch('/api/jarvis/command', {
+
+    // Build messages array with history
+    var messages = [];
+    var hist = _jvHistory.slice(0, -1);
+    hist.forEach(function(h) {
+      messages.push({ role: h.role === 'bot' ? 'assistant' : h.role, content: h.content });
+    });
+    messages.push({ role: 'user', content: msg });
+
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: msg,
-        system:  sysprompt,
-        history: _jvHistory.slice(0,-1),
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: sysprompt,
+        messages: messages
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(40000)
     });
-    var d = await r.json();
+
+    var data = await response.json();
     jvHideTyping();
 
-    var raw = d.raw || d.reply || '';
-    var parsed = jvParseResponse(raw);
+    var raw = data.content && data.content[0] ? data.content[0].text : '';
+    if(!raw) { await jvFallbackServer(msg); return; }
 
+    var parsed = jvParseResponse(raw);
     if (parsed) {
       await jvExecuteAction(parsed, msg);
     } else {
-      // Fallback: try local server
-      await jvFallbackServer(msg);
+      // If not JSON, show as plain reply
+      jvAddMsg('bot', raw);
+      jvAddToHistory('assistant', raw);
     }
   } catch(e) {
-    // Fallback to local server
+    console.warn('[Jarvis] Claude API error:', e);
     jvHideTyping();
     await jvFallbackServer(msg);
   }
@@ -8317,8 +8300,7 @@ function dashKpi(label, value, sub) {
 
 // ── Guardar memoria en localStorage ──
 // ── MEMORIA EN FIREBASE — NUNCA SE BORRA ──
-var _jvFireMemory = {};    // cache en RAM
-var _jvMemLoaded  = false;
+// _jvFireMemory declared earlier in the file
 
 // Cargar memoria desde Firebase al iniciar
 async function jvLoadFireMemory() {
@@ -9093,6 +9075,98 @@ function showiOSInstall() {
   }, 5000);
 }
 showiOSInstall();
+
+
+// ══════════════════════════════════════════════════════
+//  JARVIS VOICE — Speech Recognition
+// ══════════════════════════════════════════════════════
+
+var _jvListening   = false;
+var _jvRecognition = null;
+
+function jvToggleVoice() {
+  if (_jvListening) {
+    jvStopVoice();
+  } else {
+    jvStartVoice();
+  }
+}
+
+function jvStartVoice() {
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast('⚠️ Tu navegador no soporta reconocimiento de voz. Usa Chrome.');
+    return;
+  }
+
+  _jvRecognition = new SpeechRecognition();
+  _jvRecognition.lang = (typeof lang !== 'undefined' && lang === 'en') ? 'en-US' : 'es-US';
+  _jvRecognition.interimResults = true;
+  _jvRecognition.continuous = false;
+  _jvRecognition.maxAlternatives = 1;
+
+  var inp = document.getElementById('jvInput');
+  var btn = document.getElementById('jvVoiceBtn');
+
+  _jvRecognition.onstart = function() {
+    _jvListening = true;
+    if (btn) {
+      btn.textContent = '⏹️';
+      btn.style.borderColor = '#ef4444';
+      btn.style.color = '#ef4444';
+      btn.style.animation = 'jvPulse 1s infinite';
+    }
+    if (inp) inp.placeholder = '🎙️ Escuchando...';
+  };
+
+  _jvRecognition.onresult = function(e) {
+    var transcript = '';
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      transcript += e.results[i][0].transcript;
+    }
+    if (inp) inp.value = transcript;
+  };
+
+  _jvRecognition.onend = function() {
+    jvStopVoice();
+    // Auto-send if there's text
+    var inp2 = document.getElementById('jvInput');
+    if (inp2 && inp2.value.trim()) {
+      setTimeout(jvSend, 300);
+    }
+  };
+
+  _jvRecognition.onerror = function(e) {
+    jvStopVoice();
+    if (e.error !== 'no-speech') {
+      showToast('⚠️ Error de micrófono: ' + e.error);
+    }
+  };
+
+  try {
+    _jvRecognition.start();
+  } catch(e) {
+    jvStopVoice();
+  }
+}
+
+function jvStopVoice() {
+  _jvListening = false;
+  var btn = document.getElementById('jvVoiceBtn');
+  var inp = document.getElementById('jvInput');
+  if (btn) {
+    btn.textContent = '🎙️';
+    btn.style.borderColor = 'var(--border)';
+    btn.style.color = 'var(--muted)';
+    btn.style.animation = '';
+  }
+  if (inp) inp.placeholder = 'Escribe o presiona 🎙️ para hablar...';
+  if (_jvRecognition) {
+    try { _jvRecognition.stop(); } catch(e) {}
+    _jvRecognition = null;
+  }
+}
+
 
 </script>
 </body>
