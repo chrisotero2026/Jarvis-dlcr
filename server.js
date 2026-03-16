@@ -286,14 +286,33 @@ DLCR phone: ${TWILIO_PHONE_NUMBER}`,
 }
 
 // ═══════════════════════════════════════════════════════════
-//  HEALTH CHECK
+//  SERVE index.html  — CRM Frontend
 // ═══════════════════════════════════════════════════════════
+const path = require('path');
+
+// Serve static files (index.html, icons, etc.)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Root → serve the CRM
 app.get('/', (req, res) => {
-  res.json({
-    status:  'Jarvis DLCR Server — Online ✅',
-    version: '2.0.0',
-    features: ['Claude AI', 'ElevenLabs TTS', 'Twilio SMS', 'Twilio Calls']
-  });
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  const fs = require('fs');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    // Fallback if public folder not set up yet
+    res.json({
+      status:  'Jarvis DLCR Server — Online ✅',
+      version: '2.0.0',
+      features: ['Claude AI', 'ElevenLabs TTS', 'Twilio SMS', 'Twilio Calls'],
+      note:    'index.html not found in /public folder'
+    });
+  }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', version: '2.0.0' });
 });
 
 app.listen(port, () => {
