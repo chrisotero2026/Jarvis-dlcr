@@ -7309,7 +7309,7 @@ async function jvSend(override) {
     messages.push({ role: 'user', content: msg });
 
     // Call through Railway server to avoid CORS
-    var response = await fetch('/api/jarvis/claude', {
+    var response = await fetch('/api/jarvis', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
